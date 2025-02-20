@@ -18,7 +18,7 @@ import java.util.UUID;
  * Represents a schema builder for database operations.
  */
 public interface Schema {
-    // Column types
+
     Schema uuid(String columnName);
 
     Schema uuid(String columnName, UUID value);
@@ -50,6 +50,8 @@ public interface Schema {
     Schema bool(String columnName);
 
     Schema bool(String columnName, boolean value);
+
+    Schema json(String columnName);
 
     Schema blob(String columnName);
 
@@ -160,4 +162,3 @@ public interface Schema {
 
     String getNewTableName();
 }
-
