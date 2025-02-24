@@ -55,7 +55,7 @@ public class InsertRequest implements Executor {
 
             try (ResultSet generatedKeys = preparedStatement.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
-                    return 1;
+                    return generatedKeys.getInt(1);
                 } else {
                     return 0;
                 }
