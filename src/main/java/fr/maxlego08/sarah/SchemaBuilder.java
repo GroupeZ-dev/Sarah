@@ -282,6 +282,11 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema json(String columnName) {
+        return addColumn(new ColumnDefinition(columnName, "JSON"));
+    }
+
+    @Override
     public Schema blob(String columnName) {
         return addColumn(new ColumnDefinition(columnName, "BLOB"));
     }
