@@ -2,6 +2,7 @@ package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.logger.Logger;
+import fr.maxlego08.sarah.requests.UpsertBatchRequest;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -111,5 +112,10 @@ public class RequestHelper {
         } catch (SQLException exception) {
             exception.printStackTrace();
         }
+    }
+
+    public void upsertMultiple(List<Schema> schemas) {
+        UpsertBatchRequest request = new UpsertBatchRequest(schemas);
+        request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
     }
 }
