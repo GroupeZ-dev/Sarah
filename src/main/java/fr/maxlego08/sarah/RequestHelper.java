@@ -3,6 +3,7 @@ package fr.maxlego08.sarah;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.InsertBatchRequest;
+import fr.maxlego08.sarah.requests.UpdateBatchRequest;
 import fr.maxlego08.sarah.requests.UpsertBatchRequest;
 
 import java.sql.SQLException;
@@ -122,6 +123,11 @@ public class RequestHelper {
 
     public void insertMultiple(List<Schema> schemas) {
         InsertBatchRequest request = new InsertBatchRequest(schemas);
+        request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
+    }
+
+    public void updateMultiple(List<Schema> schemas) {
+        UpdateBatchRequest request = new UpdateBatchRequest(schemas);
         request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
     }
 }
