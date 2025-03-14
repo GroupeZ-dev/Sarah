@@ -387,6 +387,11 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema defaultCurrentTimestamp() {
+        return defaultValue("CURRENT_TIMESTAMP");
+    }
+
+    @Override
     public Schema primary() {
         ColumnDefinition lastColumn = getLastColumn();
         lastColumn.setPrimaryKey(true);

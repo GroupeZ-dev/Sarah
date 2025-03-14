@@ -23,6 +23,13 @@ public class JoinCondition {
         return new JoinCondition(null, null, primaryTableAlias, primaryColumn, null, foreignColumn, null);
     }
 
+    /**
+     * Constructs the SQL JOIN clause for this JoinCondition.
+     *
+     * @return a string representing the SQL JOIN clause, including the join type,
+     * primary table, primary column, foreign table, and foreign column.
+     * If there is an additional condition, it is appended with an AND clause.
+     */
     public String getJoinClause() {
         StringBuilder joinClause = new StringBuilder();
         joinClause.append(this.joinType.getSql()).append(" ")

@@ -12,6 +12,28 @@ import java.util.function.Consumer;
 public class ConsumerConstructor {
 
 
+    /**
+     * Creates a consumer from a template class that can be used to define a schema.
+     * The consumer will be called with a {@link Schema} object and will define the columns
+     * of the schema based on the fields of the template class.
+     * <p>
+     * The fields of the template class can have the following annotations:
+     * <ul>
+     *     <li>{@link Column}: defines the type, name and other properties of the column.
+     *     If the type is not specified, it will be inferred from the field type.
+     *     If the name is not specified, it will be the same as the field name.</li>
+     * </ul>
+     * <p>
+     * The consumer can be used to define a schema for creating a table in a database.
+     * <p>
+     * The parameter <code>data</code> is an optional object that can be used to provide values
+     * for the columns. If the object is not null, the consumer will use the values of the fields
+     * of the object to define the columns of the schema.
+     * <p>
+     * @param template the template class
+     * @param data an optional object that can be used to provide values for the columns
+     * @return a consumer that can be used to define a schema
+     */
     public static Consumer<Schema> createConsumerFromTemplate(Class<?> template, Object data) {
         Constructor<?>[] constructors = template.getDeclaredConstructors();
         Constructor<?> firstConstructor = constructors[0];
@@ -81,6 +103,28 @@ public class ConsumerConstructor {
         };
     }
 
+    /**
+     * Converts a type to a schema column.
+     * <p>
+     * The type is converted to a column in the schema as follows:
+     * <ul>
+     *     <li>{@code string}: a string column with a length of 255 characters if the object is null, otherwise a string column with the length of the object.toString()</li>
+     *     <li>{@code longtext}: a long text column</li>
+     *     <li>{@code integer}, {@code int}, {@code long}, {@code bigint}: a big int column if the object is null, otherwise a big int column with the value of the object as a long</li>
+     *     <li>{@code boolean}: a boolean column if the object is null, otherwise a boolean column with the value of the object as a boolean</li>
+     *     <li>{@code double}, {@code float}, {@code bigdecimal}: a decimal column if the object is null, otherwise a decimal column with the value of the object as a double</li>
+     *     <li>{@code uuid}: a uuid column if the object is null, otherwise a uuid column with the value of the object as a uuid</li>
+     *     <li>{@code date}: a date column with the value of the object as a date</li>
+     *     <li>{@code timestamp}: a timestamp column with the value of the object as a date</li>
+     * </ul>
+     * <p>
+     * If the type is not supported, an {@link IllegalArgumentException} is thrown.
+     * <p>
+     * @param schema the schema to add the column to
+     * @param type the type of the column
+     * @param name the name of the column
+     * @param object the value of the column, or null if the column should be added without a value
+     */
     private static void schemaFromType(Schema schema, String type, String name, Object object) {
         switch (type.toLowerCase()) {
             case "string":

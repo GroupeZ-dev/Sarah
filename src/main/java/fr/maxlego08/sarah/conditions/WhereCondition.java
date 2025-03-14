@@ -19,6 +19,17 @@ public class WhereCondition {
         this.isNotNull = true;
     }
 
+    /**
+     * Gets the SQL condition for the WHERE clause of the query.
+     *
+     * <p>If the condition is a NOT NULL condition, the SQL condition will be
+     * {@code columnName IS NOT NULL}. Otherwise, it will be a SQL condition in
+     * the format of {@code columnName operator ?}, where {@code operator} is
+     * the operator configured in the condition, and {@code ?} is a placeholder
+     * for the value of the condition.
+     *
+     * @return the SQL condition
+     */
     public String getCondition() {
         if (this.isNotNull) return this.column + " IS NOT NULL";
         return this.column + " " + this.operator + " ?";

@@ -26,6 +26,12 @@ public class ColumnDefinition {
         this.name = name;
     }
 
+    /**
+     * Build a SQL string representation of the column.
+     *
+     * @param databaseConfiguration The database configuration used to generate the SQL
+     * @return The SQL string representation of the column
+     */
     public String build(DatabaseConfiguration databaseConfiguration) {
         StringBuilder columnSQL = new StringBuilder("`" + name + "` " + type);
 
