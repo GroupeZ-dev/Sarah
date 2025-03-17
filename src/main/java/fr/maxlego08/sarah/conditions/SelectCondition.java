@@ -33,6 +33,15 @@ public class SelectCondition {
         return defaultValue;
     }
 
+    /**
+     * Gets the SQL column name for the given select condition.
+     *
+     * <p>If the select condition is a COALESCE condition, the SQL column name
+     * will be the COALESCE expression. Otherwise, it will be the column name
+     * with the given table prefix and aliases.
+     *
+     * @return the SQL column name
+     */
     public String getSelectColumn() {
         String result = this.tablePrefix == null ? this.getColumnAndAliases() : this.tablePrefix + "." + this.getColumnAndAliases();
         if (isCoalesce) {

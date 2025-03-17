@@ -1,6 +1,6 @@
 # Sarah
 
-A library to easily manage your database
+A library to easily manage your database with a simple and powerful API.
 
 ## Graddle
 
@@ -38,6 +38,7 @@ dependencies {
     <version>[VERSION]</version>
 </dependency>
 ```
+> **Note**: Please ensure to relocate your dependencies to avoid conflicts with other projects using the same library.
 
 ## How to connect to the database ?
 
