@@ -383,6 +383,8 @@ public interface Schema {
      */
     Schema whereNotNull(String columnName);
 
+    Schema whereNull(String columnName);
+
     /**
      * Adds a LEFT JOIN to the query.
      * The join is of the format: {@code primaryTable LEFT JOIN foreignTable ON primaryTable.primaryColumn = foreignTable.foreignColumn}.

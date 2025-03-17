@@ -196,7 +196,13 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public Schema whereNotNull(String columnName) {
-        this.whereConditions.add(new WhereCondition(columnName));
+        this.whereConditions.add(new WhereCondition(columnName, WhereCondition.WhereAction.IS_NOT_NULL));
+        return this;
+    }
+
+    @Override
+    public Schema whereNull(String columnName) {
+        this.whereConditions.add(new WhereCondition(columnName, WhereCondition.WhereAction.IS_NULL));
         return this;
     }
 
@@ -521,9 +527,10 @@ public class SchemaBuilder implements Schema {
     @Override
     public void applyWhereConditions(PreparedStatement preparedStatement, int index) throws SQLException {
         for (WhereCondition condition : this.whereConditions) {
-            if (!condition.isNotNull()) {
-                preparedStatement.setObject(index++, condition.getValue());
+            if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
+                preparedStatement.setObject(index, condition.getValue());
             }
+            index += 1;
         }
     }
 
