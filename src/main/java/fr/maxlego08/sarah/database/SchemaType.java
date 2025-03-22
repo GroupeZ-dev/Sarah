@@ -13,5 +13,6 @@ public enum SchemaType {
     DELETE,
     ALTER,
     RENAME,
+    CREATE_INDEX,
 
 }
