@@ -7,7 +7,6 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -38,7 +37,7 @@ public class HikariDatabaseConnection extends DatabaseConnection {
         HikariConfig config = new HikariConfig();
 
         config.setPoolName("sarah-" + POOL_COUNTER.getAndIncrement());
-        config.setJdbcUrl("jdbc:mysql://" + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase());
+        config.setJdbcUrl("jdbc:mysql://" + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase() + "?allowMultiQueries=true");
 
         config.setUsername(databaseConfiguration.getUser());
         config.setPassword(databaseConfiguration.getPassword());

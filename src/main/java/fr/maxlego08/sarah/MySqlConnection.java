@@ -16,6 +16,6 @@ public class MySqlConnection extends DatabaseConnection {
         properties.setProperty("useSSL", "false");
         properties.setProperty("user", databaseConfiguration.getUser());
         properties.setProperty("password", databaseConfiguration.getPassword());
-        return DriverManager.getConnection("jdbc:mysql://" + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase(), properties);
+        return DriverManager.getConnection("jdbc:mysql://" + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase() + "?allowMultiQueries=true", properties);
     }
 }

@@ -1,8 +1,10 @@
 package fr.maxlego08.sarah;
 
+import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.InsertBatchRequest;
+import fr.maxlego08.sarah.requests.UpdateBatchRequest;
 import fr.maxlego08.sarah.requests.UpsertBatchRequest;
 
 import java.sql.SQLException;
@@ -115,10 +117,27 @@ public class RequestHelper {
      * @param consumerResult the consumer that receives the result of the insertion execution
      */
     public void insert(String tableName, Consumer<Schema> consumer, Consumer<Integer> consumerResult) {
+        this.insert(tableName, consumer, consumerResult, () -> {
+        });
+    }
+
+    /**
+     * Inserts a row into the specified table using the given schema and captures the result.
+     * The schema builder should have a consumer that defines the columns and values to be inserted.
+     * The result of the insertion is provided to the consumerResult.
+     * If an exception is thrown, the exceptionRunnable is executed.
+     *
+     * @param tableName         the name of the table
+     * @param consumer          the consumer that defines the columns and values to be inserted
+     * @param consumerResult    the consumer that receives the result of the insertion execution
+     * @param exceptionRunnable the runnable that is executed if an exception is thrown
+     */
+    public void insert(String tableName, Consumer<Schema> consumer, Consumer<Integer> consumerResult, Runnable exceptionRunnable) {
         try {
             consumerResult.accept(SchemaBuilder.insert(tableName, consumer).execute(this.connection, this.logger));
         } catch (SQLException exception) {
             exception.printStackTrace();
+            exceptionRunnable.run();
         }
     }
 
@@ -246,5 +265,41 @@ public class RequestHelper {
     public void insertMultiple(List<Schema> schemas) {
         InsertBatchRequest request = new InsertBatchRequest(schemas);
         request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
+    }
+
+    /**
+     * Executes an update operation on a batch of schemas.
+     * This method utilizes an UpdateBatchRequest to perform the update operation
+     * on the provided list of schemas.
+     * Each schema in the list is updated in
+     * the associated database table, allowing for modifications to existing rows
+     * based on the specified schema definitions.
+     *
+     * @param schemas a list of Schema objects representing the data to be updated
+     */
+    public void updateMultiple(List<Schema> schemas) {
+
+        if (this.connection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.SQLITE) {
+            for (Schema schema : schemas) {
+                try {
+                    schema.execute(this.connection, this.logger);
+                } catch (SQLException exception) {
+                    exception.printStackTrace();
+                }
+            }
+            return;
+        }
+
+        UpdateBatchRequest request = new UpdateBatchRequest(schemas);
+        request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
+    }
+
+    /**
+     * Retrieves the current database connection.
+     *
+     * @return the active DatabaseConnection instance
+     */
+    public DatabaseConnection getConnection() {
+        return connection;
     }
 }
