@@ -41,6 +41,16 @@ public abstract class Migration {
     }
 
     /**
+     * Creates an index on the specified column in the given table.
+     *
+     * @param table  The name of the table to create the index on.
+     * @param column The name of the column to index.
+     */
+    protected void index(String table, String column) {
+        SchemaBuilder.createIndex(this, table, column);
+    }
+
+    /**
      * Drops a table from the database.
      *
      * @param table The name of the table to drop.

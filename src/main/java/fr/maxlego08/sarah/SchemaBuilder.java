@@ -11,6 +11,7 @@ import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.database.SchemaType;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.AlterRequest;
+import fr.maxlego08.sarah.requests.CreateIndexRequest;
 import fr.maxlego08.sarah.requests.CreateRequest;
 import fr.maxlego08.sarah.requests.DeleteRequest;
 import fr.maxlego08.sarah.requests.DropTableRequest;
@@ -107,6 +108,16 @@ public class SchemaBuilder implements Schema {
             MigrationManager.registerSchema(schema);
         }
         consumer.accept(schema);
+        return schema;
+    }
+
+    public static Schema createIndex(Migration migration, String tableName, String columnName) {
+        SchemaBuilder schema = new SchemaBuilder(tableName, SchemaType.CREATE_INDEX);
+        if (migration != null) {
+            schema.migration = migration;
+            MigrationManager.registerSchema(schema);
+        }
+        schema.addColumn(new ColumnDefinition(columnName, ""));
         return schema;
     }
 
@@ -738,6 +749,9 @@ public class SchemaBuilder implements Schema {
                 break;
             case DELETE:
                 executor = new DeleteRequest(this);
+                break;
+            case CREATE_INDEX:
+                executor = new CreateIndexRequest(this);
                 break;
             case SELECT:
             case SELECT_COUNT:

@@ -27,7 +27,7 @@ public class ColumnDefinition {
     }
 
     /**
-     * Build a SQL string representation of the column.
+     * Build an SQL string representation of the column.
      *
      * @param databaseConfiguration The database configuration used to generate the SQL
      * @return The SQL string representation of the column
