@@ -454,7 +454,7 @@ public class SchemaBuilder implements Schema {
         StringBuilder selectQuery = new StringBuilder("SELECT COUNT(*) FROM " + tableName);
         this.whereConditions(selectQuery);
 
-        String finalQuery = selectQuery.toString();
+        String finalQuery = databaseConnection.getDatabaseConfiguration().replacePrefix(selectQuery.toString());
         if (databaseConnection.getDatabaseConfiguration().isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }
