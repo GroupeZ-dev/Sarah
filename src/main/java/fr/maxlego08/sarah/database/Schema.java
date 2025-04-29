@@ -385,6 +385,10 @@ public interface Schema {
 
     Schema whereNull(String columnName);
 
+    Schema whereIn(String columnName, Object... objects);
+
+    Schema whereIn(String tablePrefix, String columnName, Object... objects);
+
     /**
      * Adds a LEFT JOIN to the query.
      * The join is of the format: {@code primaryTable LEFT JOIN foreignTable ON primaryTable.primaryColumn = foreignTable.foreignColumn}.

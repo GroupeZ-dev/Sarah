@@ -38,6 +38,7 @@ import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -214,6 +215,17 @@ public class SchemaBuilder implements Schema {
     @Override
     public Schema whereNull(String columnName) {
         this.whereConditions.add(new WhereCondition(columnName, WhereCondition.WhereAction.IS_NULL));
+        return this;
+    }
+
+    @Override
+    public Schema whereIn(String columnName, Object... objects) {
+        return whereIn(null, columnName, objects);
+    }
+
+    @Override
+    public Schema whereIn(String tablePrefix, String columnName, Object... objects) {
+        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, Arrays.stream(objects).map(String::valueOf).collect(Collectors.toList())));
         return this;
     }
 
@@ -540,8 +552,13 @@ public class SchemaBuilder implements Schema {
         for (WhereCondition condition : this.whereConditions) {
             if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
                 preparedStatement.setObject(index, condition.getValue());
+                index += 1;
+            } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN) {
+                for (String value : condition.getValues()) {
+                    preparedStatement.setObject(index, value);
+                    index += 1;
+                }
             }
-            index += 1;
         }
     }
 
