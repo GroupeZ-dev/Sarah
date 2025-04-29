@@ -224,8 +224,19 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema whereIn(String columnName, List<String> strings) {
+        return whereIn(null, columnName, strings);
+    }
+
+    @Override
     public Schema whereIn(String tablePrefix, String columnName, Object... objects) {
         this.whereConditions.add(new WhereCondition(tablePrefix, columnName, Arrays.stream(objects).map(String::valueOf).collect(Collectors.toList())));
+        return this;
+    }
+
+    @Override
+    public Schema whereIn(String tablePrefix, String columnName, List<String> strings) {
+        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, strings));
         return this;
     }
 
