@@ -68,8 +68,7 @@ publishing {
         register<MavenPublication>("groupez${repository}") {
             pom {
                 groupId = project.group as String?
-                name = "${rootProject.name}-${project.name}"
-                artifactId = name.get().lowercase()
+                artifactId = rootProject.name.lowercase()
                 version = project.version as String?
 
                 scm {
