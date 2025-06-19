@@ -1,7 +1,7 @@
 import java.util.Locale
 
 plugins {
-    java
+    `java-library`
     id("com.github.johnrengelman.shadow") version "7.1.2" // Pour remplacer maven-shade-plugin
     `maven-publish`
 }
@@ -21,6 +21,9 @@ extra.set("sha", System.getProperty("github.sha"))
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
+
+    withJavadocJar()
+    withSourcesJar()
 }
 
 repositories {
@@ -78,6 +81,8 @@ publishing {
                 }
             }
             artifact(tasks.shadowJar)
+            // artifact(tasks.javadocJar)
+            // artifact(tasks.sourcesJar)
         }
     }
 }
