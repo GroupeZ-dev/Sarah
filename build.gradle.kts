@@ -11,7 +11,7 @@ rootProject.extra.properties["sha"]?.let { sha ->
 }
 
 group = "fr.maxlego08.sarah"
-version = "1.17"
+version = "1.18"
 
 extra.set("targetFolder", file("target/"))
 extra.set("apiFolder", file("target-api/"))
