@@ -5,37 +5,31 @@ A library to easily manage your database with a simple and powerful API.
 ## Graddle
 
 ```gradle
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        mavenCentral()
-        maven { url 'https://jitpack.io' }
-    }
+maven {
+    name = "groupezReleases"
+    url = uri("https://repo.groupez.dev/releases")
 }
 ```
 
 ```gradle
-dependencies {
-        implementation 'com.github.Maxlego08:Sarah:<version>'
-}
+implementation("fr.maxlego08.sarah:sarah:1.18")
 ```
 
 ## Maven
 
 ```xml
-
 <repository>
-    <id>jitpack.io</id>
-    <url>https://jitpack.io</url>
+    <id>groupez-releases</id>
+    <name>GroupeZ Repository</name>
+    <url>https://repo.groupez.dev/releases</url>
 </repository>
 ```
 
 ```xml
-
 <dependency>
-    <groupId>com.github.Maxlego08</groupId>
-    <artifactId>Sarah</artifactId>
-    <version>[VERSION]</version>
+    <groupId>fr.maxlego08.sarah</groupId>
+    <artifactId>sarah</artifactId>
+    <version>1.18</version>
 </dependency>
 ```
 > **Note**: Please ensure to relocate your dependencies to avoid conflicts with other projects using the same library.
