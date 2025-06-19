@@ -23,7 +23,7 @@ jobs:
       project-name: "Sarah"
       publish: true
       publish-on-discord: false
-      project-to-publish: "API:publish"
+      project-to-publish: "publish"
     secrets:
       MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
       MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
