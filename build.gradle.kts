@@ -43,6 +43,8 @@ tasks.withType<Jar> {
 
 tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
     archiveClassifier.set("") // Écrase le JAR de base par le fat jar
+
+    relocate("com.zaxxer.hikari", "fr.maxlego08.sarah.libs.hikari")
 }
 
 tasks.build {
