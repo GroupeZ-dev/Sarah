@@ -12,7 +12,7 @@ maven {
 ```
 
 ```gradle
-implementation("fr.maxlego08.sarah:sarah:1.18")
+implementation("fr.maxlego08.sarah:sarah:1.19")
 ```
 
 ## Maven
@@ -29,7 +29,7 @@ implementation("fr.maxlego08.sarah:sarah:1.18")
 <dependency>
     <groupId>fr.maxlego08.sarah</groupId>
     <artifactId>sarah</artifactId>
-    <version>1.18</version>
+    <version>1.19</version>
 </dependency>
 ```
 > **Note**: Please ensure to relocate your dependencies to avoid conflicts with other projects using the same library.
