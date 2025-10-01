@@ -11,7 +11,7 @@ rootProject.extra.properties["sha"]?.let { sha ->
 }
 
 group = "fr.maxlego08.sarah"
-version = "1.19"
+version = "1.20"
 
 extra.set("targetFolder", file("target/"))
 extra.set("apiFolder", file("target-api/"))
@@ -74,7 +74,11 @@ publishing {
             pom {
                 groupId = project.group as String?
                 artifactId = rootProject.name.lowercase()
-                version = project.version as String?
+                version = if (repository.lowercase() == "snapshots") {
+                    System.getProperty("github.sha")
+                } else {
+                    project.version as String?
+                }
 
                 scm {
                     connection = "scm:git:git://github.com/GroupeZ-dev/${rootProject.name}.git"

@@ -1,5 +1,7 @@
 package fr.maxlego08.sarah;
 
+import fr.maxlego08.sarah.database.DatabaseType;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -32,8 +34,14 @@ public abstract class DatabaseConnection {
      */
     public boolean isValid() {
 
+        DatabaseType databaseType = this.databaseConfiguration.getDatabaseType();
+
         try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
+            if (databaseType == DatabaseType.MARIADB) {
+                Class.forName("org.mariadb.jdbc.Driver");
+            } else {
+                Class.forName("com.mysql.cj.jdbc.Driver");
+            }
         } catch (Exception ignored) {
         }
 
