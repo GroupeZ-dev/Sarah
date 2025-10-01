@@ -42,10 +42,7 @@ public class HikariDatabaseConnection extends DatabaseConnection {
         DatabaseType databaseType = databaseConfiguration.getDatabaseType();
         String jdbcPrefix = databaseType == DatabaseType.MARIADB ? "jdbc:mariadb://" : "jdbc:mysql://";
         config.setJdbcUrl(jdbcPrefix + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase() + "?allowMultiQueries=true");
-
-        if (databaseType == DatabaseType.MARIADB) {
-            config.setDriverClassName("org.mariadb.jdbc.Driver");
-        }
+        config.setDriverClassName("com.mysql.jdbc.Driver");
 
         config.setUsername(databaseConfiguration.getUser());
         config.setPassword(databaseConfiguration.getPassword());
