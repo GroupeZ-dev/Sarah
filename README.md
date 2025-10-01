@@ -45,6 +45,15 @@ public void connect() {
 }
 ````
 
+### With MariaDB
+
+````java
+public void connect() {
+    DatabaseConfiguration configuration=DatabaseConfiguration.createMariaDb(<user>,<password>,<port>,<host>,<database>);
+    DatabaseConnection connection=new MariaDbConnection(configuration);
+}
+````
+
 ### With SQLITE
 
 ````java

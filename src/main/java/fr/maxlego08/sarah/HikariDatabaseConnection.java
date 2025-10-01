@@ -2,6 +2,7 @@ package fr.maxlego08.sarah;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import fr.maxlego08.sarah.database.DatabaseType;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -37,7 +38,14 @@ public class HikariDatabaseConnection extends DatabaseConnection {
         HikariConfig config = new HikariConfig();
 
         config.setPoolName("sarah-" + POOL_COUNTER.getAndIncrement());
-        config.setJdbcUrl("jdbc:mysql://" + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase() + "?allowMultiQueries=true");
+
+        DatabaseType databaseType = databaseConfiguration.getDatabaseType();
+        String jdbcPrefix = databaseType == DatabaseType.MARIADB ? "jdbc:mariadb://" : "jdbc:mysql://";
+        config.setJdbcUrl(jdbcPrefix + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase() + "?allowMultiQueries=true");
+
+        if (databaseType == DatabaseType.MARIADB) {
+            config.setDriverClassName("org.mariadb.jdbc.Driver");
+        }
 
         config.setUsername(databaseConfiguration.getUser());
         config.setPassword(databaseConfiguration.getPassword());
