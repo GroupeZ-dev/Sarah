@@ -74,7 +74,11 @@ publishing {
             pom {
                 groupId = project.group as String?
                 artifactId = rootProject.name.lowercase()
-                version = project.version as String?
+                version = if (repository.lowercase() == "snapshots") {
+                    System.getProperty("github.sha")
+                } else {
+                    project.version as String?
+                }
 
                 scm {
                     connection = "scm:git:git://github.com/GroupeZ-dev/${rootProject.name}.git"
