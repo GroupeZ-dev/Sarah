@@ -39,8 +39,16 @@ public class DatabaseConfiguration {
         return new DatabaseConfiguration(null, user, password, port, host, database, false, DatabaseType.MYSQL);
     }
 
+    public static DatabaseConfiguration createMariaDb(String user, String password, int port, String host, String database) {
+        return new DatabaseConfiguration(null, user, password, port, host, database, false, DatabaseType.MARIADB);
+    }
+
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database, boolean debug) {
         return new DatabaseConfiguration(null, user, password, port, host, database, debug, DatabaseType.MYSQL);
+    }
+
+    public static DatabaseConfiguration createMariaDb(String user, String password, int port, String host, String database, boolean debug) {
+        return new DatabaseConfiguration(null, user, password, port, host, database, debug, DatabaseType.MARIADB);
     }
 
     public static DatabaseConfiguration create(String user, String password, String host, String database, DatabaseType databaseType) {
@@ -49,6 +57,10 @@ public class DatabaseConfiguration {
 
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database, boolean debug, DatabaseType databaseType) {
         return new DatabaseConfiguration(null, user, password, port, host, database, debug, databaseType);
+    }
+
+    public static DatabaseConfiguration createMariaDb(String user, String password, String host, String database) {
+        return new DatabaseConfiguration(null, user, password, 3306, host, database, false, DatabaseType.MARIADB);
     }
 
     public static DatabaseConfiguration sqlite(boolean debug) {
