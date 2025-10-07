@@ -53,8 +53,20 @@ public class HikariDatabaseConnection extends DatabaseConnection {
         config.setPassword(databaseConfiguration.getPassword());
 
         // Pooling
-        config.setMaximumPoolSize(MAXIMUM_POOL_SIZE);
-        config.setMinimumIdle(MINIMUM_IDLE);
+        int configuredMaxPoolSize = MAXIMUM_POOL_SIZE;
+        Integer maxPoolSize = databaseConfiguration.getMaximumPoolSize();
+        if (maxPoolSize != null && maxPoolSize > 0) {
+            configuredMaxPoolSize = maxPoolSize;
+        }
+
+        int configuredMinimumIdle = Math.min(configuredMaxPoolSize, MINIMUM_IDLE);
+        Integer minIdle = databaseConfiguration.getMinimumIdle();
+        if (minIdle != null && minIdle >= 0) {
+            configuredMinimumIdle = Math.min(configuredMaxPoolSize, minIdle);
+        }
+
+        config.setMaximumPoolSize(configuredMaxPoolSize);
+        config.setMinimumIdle(configuredMinimumIdle);
         config.setMaxLifetime(MAX_LIFETIME);
         config.setConnectionTimeout(CONNECTION_TIMEOUT);
         config.setLeakDetectionThreshold(LEAK_DETECTION_THRESHOLD);

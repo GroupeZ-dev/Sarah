@@ -18,9 +18,17 @@ public class DatabaseConfiguration {
     private final String database;
     private final boolean debug;
     private final DatabaseType databaseType;
+    private final Integer maximumPoolSize;
+    private final Integer minimumIdle;
 
     public DatabaseConfiguration(String tablePrefix, String user, String password, int port, String host,
                                  String database, boolean debug, DatabaseType databaseType) {
+        this(tablePrefix, user, password, port, host, database, debug, databaseType, null, null);
+    }
+
+    public DatabaseConfiguration(String tablePrefix, String user, String password, int port, String host,
+                                 String database, boolean debug, DatabaseType databaseType,
+                                 Integer maximumPoolSize, Integer minimumIdle) {
         this.tablePrefix = tablePrefix;
         this.user = user;
         this.password = password;
@@ -29,6 +37,8 @@ public class DatabaseConfiguration {
         this.database = database;
         this.debug = debug;
         this.databaseType = databaseType;
+        this.maximumPoolSize = maximumPoolSize;
+        this.minimumIdle = minimumIdle;
     }
 
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database, DatabaseType databaseType) {
@@ -103,6 +113,19 @@ public class DatabaseConfiguration {
         return databaseType;
     }
 
+    public Integer getMaximumPoolSize() {
+        return maximumPoolSize;
+    }
+
+    public Integer getMinimumIdle() {
+        return minimumIdle;
+    }
+
+    public DatabaseConfiguration withPoolSettings(Integer maximumPoolSize, Integer minimumIdle) {
+        return new DatabaseConfiguration(this.tablePrefix, this.user, this.password, this.port, this.host,
+                this.database, this.debug, this.databaseType, maximumPoolSize, minimumIdle);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -115,12 +138,14 @@ public class DatabaseConfiguration {
                 Objects.equals(password, that.password) &&
                 Objects.equals(host, that.host) &&
                 Objects.equals(database, that.database) &&
-                databaseType == that.databaseType;
+                databaseType == that.databaseType &&
+                Objects.equals(maximumPoolSize, that.maximumPoolSize) &&
+                Objects.equals(minimumIdle, that.minimumIdle);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(tablePrefix, user, password, port, host, database, debug, databaseType);
+        return Objects.hash(tablePrefix, user, password, port, host, database, debug, databaseType, maximumPoolSize, minimumIdle);
     }
 
     @Override
@@ -134,6 +159,8 @@ public class DatabaseConfiguration {
                 ", database='" + database + '\'' +
                 ", debug=" + debug +
                 ", databaseType=" + databaseType +
+                ", maximumPoolSize=" + maximumPoolSize +
+                ", minimumIdle=" + minimumIdle +
                 '}';
     }
 }
