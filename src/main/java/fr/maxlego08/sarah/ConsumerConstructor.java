@@ -67,22 +67,31 @@ public class ConsumerConstructor {
                     name = column.value();
                 }
 
-                try {
-                    schemaFromType(schema, typeName, name, data == null ? null : field.get(data));
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
+                if (column != null && column.autoIncrement()) {
+                    if (type.equals(long.class) || type.equals(Long.class)) {
+                        schema.autoIncrementBigInt(column.value());
+                        primaryAlready = true;
+                    } else if (type.equals(int.class) || type.equals(Integer.class)) {
+                        schema.autoIncrement(column.value());
+                        primaryAlready = true;
+                    } else {
+                        throw new IllegalArgumentException("Auto increment is only supported for long and int types");
+                    }
+                } else {
+                    try {
+                        schemaFromType(schema, typeName, name, data == null ? null : field.get(data));
+                    } catch (IllegalAccessException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
 
                 if (column != null) {
+                    if(column.primary() && column.autoIncrement()) {
+                        throw new IllegalArgumentException("A column cannot be both primary and auto increment");
+                    }
                     if (column.primary()) {
                         primaryAlready = true;
                         schema.primary();
-                    }
-                    if (column.autoIncrement()) {
-                        if (!type.getTypeName().equals("long")) {
-                            throw new IllegalArgumentException("Auto increment is only available for long type");
-                        }
-                        schema.autoIncrement(column.value());
                     }
                     if (column.foreignKey()) {
                         if (column.foreignKeyReference().isEmpty()) {
