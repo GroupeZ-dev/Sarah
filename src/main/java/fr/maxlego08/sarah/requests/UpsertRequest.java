@@ -65,9 +65,10 @@ public class UpsertRequest implements Executor {
 
         if (databaseType == DatabaseType.SQLITE) {
             StringBuilder onConflictQuery = new StringBuilder(" ON CONFLICT (");
-            List<String> primaryKeys = schema.getPrimaryKeys();
-            for (int i = 0; i < primaryKeys.size(); i++) {
-                onConflictQuery.append(i > 0 ? ", " : "").append(primaryKeys.get(i));
+            List<String> nonAutoIncrementPrimaryKeys = getNonAutoIncrementPrimaryKeys();
+
+            for (int i = 0; i < nonAutoIncrementPrimaryKeys.size(); i++) {
+                onConflictQuery.append(i > 0 ? ", " : "").append(nonAutoIncrementPrimaryKeys.get(i));
             }
             onConflictQuery.append(") DO UPDATE SET ");
             upsertQuery = insertQuery + valuesQuery.toString() + onConflictQuery + onUpdateQuery;
@@ -105,5 +106,31 @@ public class UpsertRequest implements Executor {
             return -1;
         }
 
+    }
+
+    private List<String> getNonAutoIncrementPrimaryKeys() {
+        List<String> primaryKeys = schema.getPrimaryKeys();
+
+        // Filter out auto-increment columns from primary keys for ON CONFLICT clause
+        List<String> nonAutoIncrementPrimaryKeys = new ArrayList<>();
+        for (String primaryKey : primaryKeys) {
+            boolean isAutoIncrement = false;
+            for (ColumnDefinition col : schema.getColumns()) {
+                if (col.getSafeName().equals(primaryKey) && col.isAutoIncrement()) {
+                    isAutoIncrement = true;
+                    break;
+                }
+            }
+            if (!isAutoIncrement) {
+                nonAutoIncrementPrimaryKeys.add(primaryKey);
+            }
+        }
+
+        // If no non-auto-increment primary keys exist, we cannot use ON CONFLICT
+        // In this case, fall back to a regular INSERT (which will fail on conflict)
+        if (nonAutoIncrementPrimaryKeys.isEmpty()) {
+            throw new IllegalStateException("UPSERT requires at least one non-auto-increment primary key or unique constraint for SQLite");
+        }
+        return nonAutoIncrementPrimaryKeys;
     }
 }
