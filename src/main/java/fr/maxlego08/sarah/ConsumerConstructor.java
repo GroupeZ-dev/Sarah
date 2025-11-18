@@ -74,6 +74,9 @@ public class ConsumerConstructor {
                 }
 
                 if (column != null) {
+                    if(column.primary() && column.autoIncrement()) {
+                        throw new IllegalArgumentException("A column cannot be both primary and auto increment");
+                    }
                     if (column.primary()) {
                         primaryAlready = true;
                         schema.primary();
@@ -82,6 +85,7 @@ public class ConsumerConstructor {
                         if (!type.getTypeName().equals("long")) {
                             throw new IllegalArgumentException("Auto increment is only available for long type");
                         }
+                        primaryAlready = true;
                         schema.autoIncrement(column.value());
                     }
                     if (column.foreignKey()) {
