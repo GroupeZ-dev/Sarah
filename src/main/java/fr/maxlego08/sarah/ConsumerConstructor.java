@@ -74,7 +74,7 @@ public class ConsumerConstructor {
                 }
 
                 if (column != null) {
-                    if (column.primary() && !primaryAlready) {
+                    if (column.primary()) {
                         primaryAlready = true;
                         schema.primary();
                     }
