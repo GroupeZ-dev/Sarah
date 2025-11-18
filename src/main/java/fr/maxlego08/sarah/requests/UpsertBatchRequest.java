@@ -37,11 +37,9 @@ public class UpsertBatchRequest implements Executor {
         List<Object> values = new ArrayList<>();
         List<String> placeholders = new ArrayList<>();
         List<String> insertColumnNames = new ArrayList<>();
-        List<String> allColumnNames = new ArrayList<>();
 
-        // Build column lists - skip auto-increment for INSERT, include all for UPDATE
+        // Build column list - skip auto-increment columns
         for (ColumnDefinition column : firstSchema.getColumns()) {
-            allColumnNames.add(column.getSafeName());
             if (!column.isAutoIncrement()) {
                 insertColumnNames.add(column.getSafeName());
             }
@@ -68,19 +66,19 @@ public class UpsertBatchRequest implements Executor {
             List<String> primaryKeys = firstSchema.getPrimaryKeys();
             onConflictQuery.append(String.join(", ", primaryKeys)).append(") DO UPDATE SET ");
 
-            // Use all columns for UPDATE (including auto-increment)
-            for (int i = 0; i < allColumnNames.size(); i++) {
+            // Skip auto-increment columns in UPDATE as well
+            for (int i = 0; i < insertColumnNames.size(); i++) {
                 if (i > 0) onUpdateQuery.append(", ");
-                onUpdateQuery.append(allColumnNames.get(i)).append(" = excluded.").append(allColumnNames.get(i));
+                onUpdateQuery.append(insertColumnNames.get(i)).append(" = excluded.").append(insertColumnNames.get(i));
             }
 
             insertQuery.append(valuesQuery).append(onConflictQuery).append(onUpdateQuery);
         } else {
             onUpdateQuery.append(" ON DUPLICATE KEY UPDATE ");
-            // Use all columns for UPDATE (including auto-increment)
-            for (int i = 0; i < allColumnNames.size(); i++) {
+            // Skip auto-increment columns in UPDATE as well
+            for (int i = 0; i < insertColumnNames.size(); i++) {
                 if (i > 0) onUpdateQuery.append(", ");
-                onUpdateQuery.append(allColumnNames.get(i)).append(" = VALUES(").append(allColumnNames.get(i)).append(")");
+                onUpdateQuery.append(insertColumnNames.get(i)).append(" = VALUES(").append(insertColumnNames.get(i)).append(")");
             }
 
             insertQuery.append(valuesQuery).append(onUpdateQuery);

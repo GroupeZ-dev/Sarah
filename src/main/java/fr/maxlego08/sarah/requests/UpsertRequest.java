@@ -43,17 +43,19 @@ public class UpsertRequest implements Executor {
                 insertIndex++;
             }
 
-            // Include all columns in UPDATE part
-            if (updateIndex > 0) {
-                onUpdateQuery.append(", ");
+            // Skip auto-increment columns in UPDATE part as well
+            if (!columnDefinition.isAutoIncrement()) {
+                if (updateIndex > 0) {
+                    onUpdateQuery.append(", ");
+                }
+                if (databaseType == DatabaseType.SQLITE) {
+                    onUpdateQuery.append(columnDefinition.getSafeName()).append(" = excluded.").append(columnDefinition.getSafeName());
+                } else {
+                    onUpdateQuery.append(columnDefinition.getSafeName()).append(" = ?");
+                    updateValues.add(columnDefinition.getObject());
+                }
+                updateIndex++;
             }
-            if (databaseType == DatabaseType.SQLITE) {
-                onUpdateQuery.append(columnDefinition.getSafeName()).append(" = excluded.").append(columnDefinition.getSafeName());
-            } else {
-                onUpdateQuery.append(columnDefinition.getSafeName()).append(" = ?");
-                updateValues.add(columnDefinition.getObject());
-            }
-            updateIndex++;
         }
 
         insertQuery.append(") ");
