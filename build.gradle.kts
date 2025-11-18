@@ -13,6 +13,7 @@ rootProject.extra.properties["sha"]?.let { sha ->
 group = "fr.maxlego08.sarah"
 version = "1.20.2"
 
+
 extra.set("targetFolder", file("target/"))
 extra.set("apiFolder", file("target-api/"))
 extra.set("classifier", System.getProperty("archive.classifier"))
