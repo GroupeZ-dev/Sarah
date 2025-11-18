@@ -27,15 +27,18 @@ public class InsertAllRequest implements Executor {
         StringBuilder insertBuilder = new StringBuilder("INSERT INTO " + this.toTableName + " (");
         StringBuilder columns = new StringBuilder();
 
-        int size = this.schema.getColumns().size();
-        for (int i = 0; i < size; i++) {
+        int columnIndex = 0;
+        for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
+            // Skip auto-increment columns
+            if (columnDefinition.isAutoIncrement()) {
+                continue;
+            }
 
-            ColumnDefinition columnDefinition = this.schema.getColumns().get(i);
-
-            columns.append(columnDefinition.getSafeName());
-            if (i < (size - 1)) {
+            if (columnIndex > 0) {
                 columns.append(",");
             }
+            columns.append(columnDefinition.getSafeName());
+            columnIndex++;
         }
 
         insertBuilder.append(columns).append(") ");

@@ -31,11 +31,16 @@ public class InsertRequest implements Executor {
 
         List<Object> values = new ArrayList<>();
 
-        for (int i = 0; i < this.schema.getColumns().size(); i++) {
-            ColumnDefinition columnDefinition = this.schema.getColumns().get(i);
-            insertQuery.append(i > 0 ? ", " : "").append(columnDefinition.getSafeName());
-            valuesQuery.append(i > 0 ? ", " : "").append("?");
+        int paramIndex = 0;
+        for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
+            // Skip auto-increment columns
+            if (columnDefinition.isAutoIncrement()) {
+                continue;
+            }
+            insertQuery.append(paramIndex > 0 ? ", " : "").append(columnDefinition.getSafeName());
+            valuesQuery.append(paramIndex > 0 ? ", " : "").append("?");
             values.add(columnDefinition.getObject());
+            paramIndex++;
         }
 
         insertQuery.append(") ");

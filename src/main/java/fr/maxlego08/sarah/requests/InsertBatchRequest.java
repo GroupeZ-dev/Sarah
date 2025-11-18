@@ -37,8 +37,11 @@ public class InsertBatchRequest implements Executor {
         List<String> placeholders = new ArrayList<>();
         List<String> columnNames = new ArrayList<>();
 
+        // Skip auto-increment columns
         for (ColumnDefinition column : firstSchema.getColumns()) {
-            columnNames.add(column.getSafeName());
+            if (!column.isAutoIncrement()) {
+                columnNames.add(column.getSafeName());
+            }
         }
 
         insertQuery.append(String.join(", ", columnNames)).append(") ");
@@ -46,8 +49,11 @@ public class InsertBatchRequest implements Executor {
         for (Schema schema : schemas) {
             List<String> rowPlaceholders = new ArrayList<>();
             for (ColumnDefinition column : schema.getColumns()) {
-                rowPlaceholders.add("?");
-                values.add(column.getObject());
+                // Skip auto-increment columns
+                if (!column.isAutoIncrement()) {
+                    rowPlaceholders.add("?");
+                    values.add(column.getObject());
+                }
             }
             placeholders.add("(" + String.join(", ", rowPlaceholders) + ")");
         }

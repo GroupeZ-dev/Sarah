@@ -36,19 +36,27 @@ public class UpsertBatchRequest implements Executor {
 
         List<Object> values = new ArrayList<>();
         List<String> placeholders = new ArrayList<>();
-        List<String> columnNames = new ArrayList<>();
+        List<String> insertColumnNames = new ArrayList<>();
+        List<String> allColumnNames = new ArrayList<>();
 
+        // Build column lists - skip auto-increment for INSERT, include all for UPDATE
         for (ColumnDefinition column : firstSchema.getColumns()) {
-            columnNames.add(column.getSafeName());
+            allColumnNames.add(column.getSafeName());
+            if (!column.isAutoIncrement()) {
+                insertColumnNames.add(column.getSafeName());
+            }
         }
 
-        insertQuery.append(String.join(", ", columnNames)).append(") ");
+        insertQuery.append(String.join(", ", insertColumnNames)).append(") ");
 
         for (Schema schema : schemas) {
             List<String> rowPlaceholders = new ArrayList<>();
             for (ColumnDefinition column : schema.getColumns()) {
-                rowPlaceholders.add("?");
-                values.add(column.getObject());
+                // Skip auto-increment columns
+                if (!column.isAutoIncrement()) {
+                    rowPlaceholders.add("?");
+                    values.add(column.getObject());
+                }
             }
             placeholders.add("(" + String.join(", ", rowPlaceholders) + ")");
         }
@@ -60,19 +68,21 @@ public class UpsertBatchRequest implements Executor {
             List<String> primaryKeys = firstSchema.getPrimaryKeys();
             onConflictQuery.append(String.join(", ", primaryKeys)).append(") DO UPDATE SET ");
 
-            for (int i = 0; i < columnNames.size(); i++) {
+            // Use all columns for UPDATE (including auto-increment)
+            for (int i = 0; i < allColumnNames.size(); i++) {
                 if (i > 0) onUpdateQuery.append(", ");
-                onUpdateQuery.append(columnNames.get(i)).append(" = excluded.").append(columnNames.get(i));
+                onUpdateQuery.append(allColumnNames.get(i)).append(" = excluded.").append(allColumnNames.get(i));
             }
-            
+
             insertQuery.append(valuesQuery).append(onConflictQuery).append(onUpdateQuery);
         } else {
             onUpdateQuery.append(" ON DUPLICATE KEY UPDATE ");
-            for (int i = 0; i < columnNames.size(); i++) {
+            // Use all columns for UPDATE (including auto-increment)
+            for (int i = 0; i < allColumnNames.size(); i++) {
                 if (i > 0) onUpdateQuery.append(", ");
-                onUpdateQuery.append(columnNames.get(i)).append(" = VALUES(").append(columnNames.get(i)).append(")");
+                onUpdateQuery.append(allColumnNames.get(i)).append(" = VALUES(").append(allColumnNames.get(i)).append(")");
             }
-            
+
             insertQuery.append(valuesQuery).append(onUpdateQuery);
         }
 

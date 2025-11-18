@@ -156,6 +156,10 @@ public class ColumnDefinition {
         return this;
     }
 
+    public boolean isAutoIncrement() {
+        return isAutoIncrement;
+    }
+
     public ColumnDefinition setAutoIncrement(boolean isAutoIncrement) {
         this.isAutoIncrement = isAutoIncrement;
         return this;

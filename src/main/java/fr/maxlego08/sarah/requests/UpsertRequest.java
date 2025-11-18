@@ -29,21 +29,31 @@ public class UpsertRequest implements Executor {
         StringBuilder valuesQuery = new StringBuilder("VALUES (");
         StringBuilder onUpdateQuery = new StringBuilder();
 
-        List<Object> values = new ArrayList<>();
+        List<Object> insertValues = new ArrayList<>();
+        List<Object> updateValues = new ArrayList<>();
 
-        for (int i = 0; i < this.schema.getColumns().size(); i++) {
-            ColumnDefinition columnDefinition = this.schema.getColumns().get(i);
-            insertQuery.append(i > 0 ? ", " : "").append(columnDefinition.getSafeName());
-            valuesQuery.append(i > 0 ? ", " : "").append("?");
-            if (i > 0) {
+        int insertIndex = 0;
+        int updateIndex = 0;
+        for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
+            // Skip auto-increment columns in INSERT part
+            if (!columnDefinition.isAutoIncrement()) {
+                insertQuery.append(insertIndex > 0 ? ", " : "").append(columnDefinition.getSafeName());
+                valuesQuery.append(insertIndex > 0 ? ", " : "").append("?");
+                insertValues.add(columnDefinition.getObject());
+                insertIndex++;
+            }
+
+            // Include all columns in UPDATE part
+            if (updateIndex > 0) {
                 onUpdateQuery.append(", ");
             }
             if (databaseType == DatabaseType.SQLITE) {
                 onUpdateQuery.append(columnDefinition.getSafeName()).append(" = excluded.").append(columnDefinition.getSafeName());
             } else {
                 onUpdateQuery.append(columnDefinition.getSafeName()).append(" = ?");
+                updateValues.add(columnDefinition.getObject());
             }
-            values.add(columnDefinition.getObject());
+            updateIndex++;
         }
 
         insertQuery.append(") ");
@@ -75,13 +85,13 @@ public class UpsertRequest implements Executor {
             int index = 1;
 
             // Setting values for INSERT part
-            for (Object value : values) {
+            for (Object value : insertValues) {
                 preparedStatement.setObject(index++, value);
             }
 
             // Setting values for UPDATE part (only if not SQLite, since SQLite uses "excluded" keyword)
             if (databaseType != DatabaseType.SQLITE) {
-                for (Object value : values) {
+                for (Object value : updateValues) {
                     preparedStatement.setObject(index++, value);
                 }
             }
