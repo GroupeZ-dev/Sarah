@@ -220,20 +220,19 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public Schema whereIn(String columnName, Object... objects) {
-        return whereIn(null, columnName, objects);
+        // Convert varargs to List to avoid ambiguity
+        List<String> valuesList = Arrays.stream(objects).map(String::valueOf).collect(Collectors.toList());
+        this.whereConditions.add(new WhereCondition(null, columnName, valuesList));
+        return this;
     }
 
     @Override
     public Schema whereIn(String columnName, List<String> strings) {
-        return whereIn(null, columnName, strings);
-    }
-
-    @Override
-    public Schema whereIn(String tablePrefix, String columnName, Object... objects) {
-        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, Arrays.stream(objects).map(String::valueOf).collect(Collectors.toList())));
+        this.whereConditions.add(new WhereCondition(null, columnName, strings));
         return this;
     }
 
+    // Method with table prefix - use List to avoid ambiguity with varargs version
     @Override
     public Schema whereIn(String tablePrefix, String columnName, List<String> strings) {
         this.whereConditions.add(new WhereCondition(tablePrefix, columnName, strings));

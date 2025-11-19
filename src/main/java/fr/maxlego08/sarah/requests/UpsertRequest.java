@@ -109,10 +109,10 @@ public class UpsertRequest implements Executor {
     }
 
     private List<String> getNonAutoIncrementPrimaryKeys() {
-        List<String> primaryKeys = schema.getPrimaryKeys();
+        List<String> conflictColumns = new ArrayList<>();
 
-        // Filter out auto-increment columns from primary keys for ON CONFLICT clause
-        List<String> nonAutoIncrementPrimaryKeys = new ArrayList<>();
+        // First, try to find primary keys that are not auto-increment
+        List<String> primaryKeys = schema.getPrimaryKeys();
         for (String primaryKey : primaryKeys) {
             boolean isAutoIncrement = false;
             for (ColumnDefinition col : schema.getColumns()) {
@@ -122,15 +122,24 @@ public class UpsertRequest implements Executor {
                 }
             }
             if (!isAutoIncrement) {
-                nonAutoIncrementPrimaryKeys.add(primaryKey);
+                conflictColumns.add(primaryKey);
             }
         }
 
-        // If no non-auto-increment primary keys exist, we cannot use ON CONFLICT
-        // In this case, fall back to a regular INSERT (which will fail on conflict)
-        if (nonAutoIncrementPrimaryKeys.isEmpty()) {
+        // If no non-auto-increment primary keys exist, look for UNIQUE columns
+        if (conflictColumns.isEmpty()) {
+            for (ColumnDefinition col : schema.getColumns()) {
+                // Check if column is unique and not auto-increment
+                if (col.isUnique() && !col.isAutoIncrement()) {
+                    conflictColumns.add(col.getSafeName());
+                }
+            }
+        }
+
+        // If still no conflict columns found, throw error
+        if (conflictColumns.isEmpty()) {
             throw new IllegalStateException("UPSERT requires at least one non-auto-increment primary key or unique constraint for SQLite");
         }
-        return nonAutoIncrementPrimaryKeys;
+        return conflictColumns;
     }
 }

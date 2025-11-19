@@ -33,6 +33,16 @@ repositories {
 
 dependencies {
     implementation("com.zaxxer:HikariCP:4.0.3")
+
+    // Test dependencies
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:5.9.3")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.3")
+    testImplementation("org.mockito:mockito-core:5.3.1")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.3.1")
+    testImplementation("org.xerial:sqlite-jdbc:3.42.0.0")
+    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.1.4")
+    testImplementation("com.mysql:mysql-connector-j:8.0.33")
 }
 
 tasks.withType<Jar> {
@@ -50,6 +60,10 @@ tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
 
 tasks.build {
     dependsOn(tasks.shadowJar)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 publishing {

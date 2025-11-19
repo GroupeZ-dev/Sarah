@@ -65,6 +65,7 @@ public class InsertRequest implements Executor {
                     return 0;
                 }
             } catch (Exception exception) {
+                exception.printStackTrace();
                 return -1;
             }
         } catch (SQLException exception) {

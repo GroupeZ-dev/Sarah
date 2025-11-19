@@ -389,8 +389,6 @@ public interface Schema {
 
     Schema whereIn(String columnName, List<String> strings);
 
-    Schema whereIn(String tablePrefix, String columnName, Object... objects);
-
     Schema whereIn(String tablePrefix, String columnName, List<String> strings);
 
     /**

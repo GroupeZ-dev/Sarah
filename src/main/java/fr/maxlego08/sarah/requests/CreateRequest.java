@@ -28,12 +28,20 @@ public class CreateRequest implements Executor {
         createTableSQL.append(this.schema.getTableName()).append(" (");
 
         List<String> columnSQLs = new ArrayList<>();
+        boolean hasInlinePrimaryKey = false;
+
         for (ColumnDefinition column : this.schema.getColumns()) {
             columnSQLs.add(column.build(databaseConfiguration));
+            // Check if this column has inline PRIMARY KEY (SQLite autoincrement)
+            if (column.isAutoIncrement() && column.isPrimaryKey() &&
+                databaseConfiguration.getDatabaseType() == fr.maxlego08.sarah.database.DatabaseType.SQLITE) {
+                hasInlinePrimaryKey = true;
+            }
         }
         createTableSQL.append(String.join(", ", columnSQLs));
 
-        if (!this.schema.getPrimaryKeys().isEmpty()) {
+        // Only add separate PRIMARY KEY clause if there's no inline PRIMARY KEY
+        if (!this.schema.getPrimaryKeys().isEmpty() && !hasInlinePrimaryKey) {
             createTableSQL.append(", PRIMARY KEY (").append(String.join(", ", this.schema.getPrimaryKeys())).append(")");
         }
 
