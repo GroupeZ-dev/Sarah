@@ -5,6 +5,7 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -56,8 +57,8 @@ public class InsertAllRequest implements Executor {
         try (Connection connection = databaseConnection.getConnection(); PreparedStatement preparedStatement = connection.prepareStatement(insertQuery)) {
             preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Insert all operation failed from table: " + this.schema.getTableName() + " to table: " + this.toTableName + " - " + exception.getMessage());
+            throw new DatabaseException("insertAll", this.toTableName, exception);
         }
 
         return 0;

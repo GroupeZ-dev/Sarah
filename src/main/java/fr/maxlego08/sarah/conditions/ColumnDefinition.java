@@ -33,7 +33,15 @@ public class ColumnDefinition {
      * @return The SQL string representation of the column
      */
     public String build(DatabaseConfiguration databaseConfiguration) {
-        StringBuilder columnSQL = new StringBuilder("`" + name + "` " + type);
+        // For SQLite autoincrement, use INTEGER instead of BIGINT/INT
+        String columnType = type;
+        if (isAutoIncrement && databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
+            if (type.equalsIgnoreCase("BIGINT") || type.equalsIgnoreCase("INT") || type.equalsIgnoreCase("INTEGER")) {
+                columnType = "INTEGER";
+            }
+        }
+
+        StringBuilder columnSQL = new StringBuilder("`" + name + "` " + columnType);
 
         if (length != 0 && decimal != 0) {
             columnSQL.append("(").append(length).append(",").append(decimal).append(")");
@@ -41,8 +49,17 @@ public class ColumnDefinition {
             columnSQL.append("(").append(length).append(")");
         }
 
-        if (isAutoIncrement) {
-            if (databaseConfiguration.getDatabaseType() != DatabaseType.SQLITE) {
+        // For autoincrement columns with primary key
+        if (isAutoIncrement && isPrimaryKey) {
+            if (databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
+                // SQLite: INTEGER PRIMARY KEY AUTOINCREMENT (inline, no NOT NULL needed)
+                columnSQL.append(" PRIMARY KEY AUTOINCREMENT");
+                if (unique) {
+                    columnSQL.append(" UNIQUE");
+                }
+                return columnSQL.toString();
+            } else {
+                // MySQL/MariaDB: column will have AUTO_INCREMENT
                 columnSQL.append(" AUTO_INCREMENT");
             }
         }
@@ -145,6 +162,10 @@ public class ColumnDefinition {
 
     public void setUnique(boolean unique) {
         this.unique = unique;
+    }
+
+    public boolean isUnique() {
+        return unique;
     }
 
     public Object getObject() {

@@ -6,6 +6,7 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.conditions.JoinCondition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -69,8 +70,8 @@ public class UpdateBatchRequest implements Executor {
             return total;
 
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Update batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("updateBatch", firstSchema.getTableName(), exception);
         }
     }
 }

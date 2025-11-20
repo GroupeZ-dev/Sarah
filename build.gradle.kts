@@ -2,22 +2,21 @@ import java.util.Locale
 
 plugins {
     `java-library`
-    id("com.github.johnrengelman.shadow") version "7.1.2" // Pour remplacer maven-shade-plugin
+    id("re.alwyn974.groupez.publish") version "1.0.0"
+    id("com.gradleup.shadow") version "9.0.0-beta11"
     `maven-publish`
 }
+
+extra.set("targetFolder", file("target/"))
+extra.set("classifier", System.getProperty("archive.classifier"))
+extra.set("sha", System.getProperty("github.sha"))
+
+group = "fr.maxlego08.sarah"
+version = "1.21"
 
 rootProject.extra.properties["sha"]?.let { sha ->
     version = sha
 }
-
-group = "fr.maxlego08.sarah"
-version = "1.20.2"
-
-
-extra.set("targetFolder", file("target/"))
-extra.set("apiFolder", file("target-api/"))
-extra.set("classifier", System.getProperty("archive.classifier"))
-extra.set("sha", System.getProperty("github.sha"))
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
@@ -33,6 +32,16 @@ repositories {
 
 dependencies {
     implementation("com.zaxxer:HikariCP:4.0.3")
+
+    // Test dependencies
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:5.9.3")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.3")
+    testImplementation("org.mockito:mockito-core:5.3.1")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.3.1")
+    testImplementation("org.xerial:sqlite-jdbc:3.42.0.0")
+    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.1.4")
+    testImplementation("com.mysql:mysql-connector-j:8.2.0")
 }
 
 tasks.withType<Jar> {
@@ -52,44 +61,16 @@ tasks.build {
     dependsOn(tasks.shadowJar)
 }
 
-publishing {
+tasks.shadowJar {
+    archiveClassifier.set("")
+    destinationDirectory.set(rootProject.extra["targetFolder"] as File)
+}
 
-    var repository = System.getProperty("repository.name", "snapshots").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+tasks.test {
+    useJUnitPlatform()
+}
 
-    repositories {
-        maven {
-            name = "groupez${repository}"
-            url = uri("https://repo.groupez.dev/${repository.lowercase()}")
-            credentials {
-                username = findProperty("${name}Username") as String? ?: System.getenv("MAVEN_USERNAME")
-                password = findProperty("${name}Password") as String? ?: System.getenv("MAVEN_PASSWORD")
-            }
-            authentication {
-                create<BasicAuthentication>("basic")
-            }
-        }
-    }
-
-    publications {
-        register<MavenPublication>("groupez${repository}") {
-            pom {
-                groupId = project.group as String?
-                artifactId = rootProject.name.lowercase()
-                version = if (repository.lowercase() == "snapshots") {
-                    System.getProperty("github.sha")
-                } else {
-                    project.version as String?
-                }
-
-                scm {
-                    connection = "scm:git:git://github.com/GroupeZ-dev/${rootProject.name}.git"
-                    developerConnection = "scm:git:ssh://github.com/GroupeZ-dev/${rootProject.name}.git"
-                    url = "https://github.com/GroupeZ-dev/${rootProject.name}/"
-                }
-            }
-            artifact(tasks.shadowJar)
-            // artifact(tasks.javadocJar)
-            // artifact(tasks.sourcesJar)
-        }
-    }
+publishConfig {
+    githubOwner = "GroupeZ-dev"
+    useRootProjectName = true
 }
