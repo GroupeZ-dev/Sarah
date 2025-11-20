@@ -9,6 +9,7 @@ import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Migration;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.database.SchemaType;
+import fr.maxlego08.sarah.exceptions.SarahException;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.AlterRequest;
 import fr.maxlego08.sarah.requests.CreateIndexRequest;
@@ -20,6 +21,7 @@ import fr.maxlego08.sarah.requests.ModifyRequest;
 import fr.maxlego08.sarah.requests.RenameExecutor;
 import fr.maxlego08.sarah.requests.UpdateRequest;
 import fr.maxlego08.sarah.requests.UpsertRequest;
+import fr.maxlego08.sarah.security.SecureObjectInputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -492,7 +494,7 @@ public class SchemaBuilder implements Schema {
                 }
             }
         } catch (SQLException exception) {
-            exception.printStackTrace();
+            logger.info("Failed to execute schema select count: " + exception.getMessage());
             throw new SQLException("Failed to execute schema select count: " + exception.getMessage(), exception);
         }
         return 0;
@@ -629,8 +631,7 @@ public class SchemaBuilder implements Schema {
                 try {
                     return formatter.parse((String) value);
                 } catch (ParseException exception) {
-                    exception.printStackTrace();
-                    return null;
+                    throw new SarahException("Failed to parse date: " + value, exception);
                 }
             }
             if (value instanceof Number) {
@@ -653,11 +654,34 @@ public class SchemaBuilder implements Schema {
         }
     }
 
+    /**
+     * Securely deserializes an object from a byte array using a whitelist approach.
+     * This method protects against deserialization attacks (CVE-2015-7501, CVE-2017-7525, etc.)
+     * by only allowing specific classes to be deserialized.
+     *
+     * <p>The package of the requested type is automatically whitelisted, allowing users
+     * of this library to deserialize their own model classes without additional configuration.
+     * This provides security by default while maintaining ease of use.</p>
+     *
+     * @param data the serialized object data
+     * @param type the expected type of the deserialized object
+     * @return the deserialized object
+     * @throws SarahException if deserialization fails or an unauthorized class is detected
+     */
     protected <T> T deserializeObject(byte[] data, Class<T> type) {
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(data); ObjectInputStream ois = new ObjectInputStream(bais)) {
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
+             SecureObjectInputStream ois = new SecureObjectInputStream(bais, type)) {
+
+            // Automatically allow the package of the requested type
+            // This allows library users to deserialize their own model classes
+            if (type.getPackage() != null) {
+                String packageName = type.getPackage().getName();
+                ois.allowPackagePrefix(packageName);
+            }
+
             return type.cast(ois.readObject());
         } catch (IOException | ClassNotFoundException exception) {
-            throw new Error("An exception occurred during deserialization of a BLOB ", exception);
+            throw new SarahException("Failed to deserialize BLOB: " + exception.getMessage(), exception);
         }
     }
 

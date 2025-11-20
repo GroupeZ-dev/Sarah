@@ -5,6 +5,7 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -60,8 +61,8 @@ public class CreateRequest implements Executor {
             preparedStatement.execute();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Create table operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("create", this.schema.getTableName(), exception);
         }
     }
 }

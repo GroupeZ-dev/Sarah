@@ -5,6 +5,7 @@ import fr.maxlego08.sarah.database.Schema;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -39,8 +40,18 @@ public class ConsumerConstructor {
         Constructor<?> firstConstructor = constructors[0];
         firstConstructor.setAccessible(true);
 
-        Field[] fields = template.getDeclaredFields();
-        if (fields.length != firstConstructor.getParameterCount()) {
+        Field[] allFields = template.getDeclaredFields();
+        // Filter out synthetic fields (added by compiler for local/anonymous classes)
+        Field[] fields = Arrays.stream(allFields)
+                .filter(f -> !f.isSynthetic())
+                .toArray(Field[]::new);
+
+        // For local/anonymous classes, count only non-synthetic constructor parameters
+        long nonSyntheticParamCount = Arrays.stream(firstConstructor.getParameters())
+                .filter(p -> !p.isSynthetic())
+                .count();
+
+        if (fields.length != nonSyntheticParamCount) {
             throw new IllegalArgumentException("Fields count does not match constructor parameters count");
         }
 
@@ -101,6 +112,9 @@ public class ConsumerConstructor {
                     }
                     if (column.nullable()) {
                         schema.nullable();
+                    }
+                    if (column.unique()) {
+                        schema.unique();
                     }
                 }
 

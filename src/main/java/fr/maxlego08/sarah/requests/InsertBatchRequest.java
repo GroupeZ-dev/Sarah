@@ -5,6 +5,7 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -73,9 +74,9 @@ public class InsertBatchRequest implements Executor {
             for (Object value : values) {
                 preparedStatement.setObject(index++, value);
             }
-            
+
             int updatedRows = preparedStatement.executeUpdate();
-            
+
             try (ResultSet generatedKeys = preparedStatement.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
                     return generatedKeys.getInt(1);
@@ -83,8 +84,8 @@ public class InsertBatchRequest implements Executor {
             }
             return updatedRows;
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Insert batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("insertBatch", firstSchema.getTableName(), exception);
         }
     }
 }

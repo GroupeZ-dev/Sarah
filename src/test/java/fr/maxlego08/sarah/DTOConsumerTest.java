@@ -17,10 +17,14 @@ public class DTOConsumerTest extends DatabaseTestBase {
 
     // Simple DTO using constructor only
     public static class ProductDTO {
+        @Column(value = "id", autoIncrement = true)
         private final Long id;
+        @Column(value = "name", unique = true)
         private final String name;
+        @Column(value = "description", nullable = true)
         private final String description;
         private final Double price;
+        @Column(value = "stock", nullable = true)
         private final Integer stock;
         private final Boolean available;
 
@@ -65,6 +69,30 @@ public class DTOConsumerTest extends DatabaseTestBase {
         public String getUsername() { return username; }
         public String getEmail() { return email; }
         public Integer getAge() { return age; }
+    }
+
+    // DTO with various data types
+    public static class ComplexDTO {
+        @Column(value = "id", autoIncrement = true)
+        private final Long id;
+        private final String textField;
+        private final Integer intField;
+        private final Double doubleField;
+        private final Boolean boolField;
+
+        public ComplexDTO(Long id, String textField, Integer intField, Double doubleField, Boolean boolField) {
+            this.id = id;
+            this.textField = textField;
+            this.intField = intField;
+            this.doubleField = doubleField;
+            this.boolField = boolField;
+        }
+
+        public Long getId() { return id; }
+        public String getTextField() { return textField; }
+        public Integer getIntField() { return intField; }
+        public Double getDoubleField() { return doubleField; }
+        public Boolean getBoolField() { return boolField; }
     }
 
     @Test
@@ -116,10 +144,16 @@ public class DTOConsumerTest extends DatabaseTestBase {
 
         ProductDTO product = new ProductDTO(null, "Keyboard", "Mechanical keyboard", 149.99, 30, true);
         requestHelper.insert("test_products", ProductDTO.class, product);
-
-        // Update using DTO
-        ProductDTO updatedProduct = new ProductDTO(null, "Keyboard RGB", "RGB Mechanical keyboard", 199.99, 25, true);
-        requestHelper.update("test_products", ProductDTO.class, updatedProduct);
+        
+        // Update using manual schema with WHERE clause
+        requestHelper.update("test_products", schema -> {
+            schema.string("name", "Keyboard RGB");
+            schema.string("description", "RGB Mechanical keyboard");
+            schema.decimal("price", 199.99);
+            schema.bigInt("stock", 25);
+            schema.bool("available", true);
+            schema.where("name", "Keyboard");
+        });
 
         // Verify update
         try (Statement stmt = connection.getConnection().createStatement()) {
@@ -256,29 +290,6 @@ public class DTOConsumerTest extends DatabaseTestBase {
 
     @Test
     public void testDTOWithDifferentTypes() throws Exception {
-        // DTO with various data types
-        class ComplexDTO {
-            private final Long id;
-            private final String textField;
-            private final Integer intField;
-            private final Double doubleField;
-            private final Boolean boolField;
-
-            public ComplexDTO(Long id, String textField, Integer intField, Double doubleField, Boolean boolField) {
-                this.id = id;
-                this.textField = textField;
-                this.intField = intField;
-                this.doubleField = doubleField;
-                this.boolField = boolField;
-            }
-
-            public Long getId() { return id; }
-            public String getTextField() { return textField; }
-            public Integer getIntField() { return intField; }
-            public Double getDoubleField() { return doubleField; }
-            public Boolean getBoolField() { return boolField; }
-        }
-
         SchemaBuilder.create(null, "test_complex", ComplexDTO.class).execute(connection, testLogger);
 
         ComplexDTO complex = new ComplexDTO(null, "test", 42, 3.14, true);

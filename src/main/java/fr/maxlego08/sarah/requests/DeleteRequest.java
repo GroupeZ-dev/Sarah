@@ -4,6 +4,7 @@ import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -34,8 +35,8 @@ public class DeleteRequest implements Executor {
             int result = preparedStatement.executeUpdate();
             return result;
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Delete operation failed on table: " + schemaBuilder.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("delete", schemaBuilder.getTableName(), exception);
         }
     }
 }

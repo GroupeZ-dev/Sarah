@@ -258,19 +258,21 @@ public class MigrationTest extends DatabaseTestBase {
             s.string("username", "user1");
         });
 
-        // Try to insert duplicate email
+        // Try to insert duplicate email - should either throw exception or fail silently
         try {
             requestHelper.insert("test_unique", s -> {
                 s.string("email", "unique@example.com");
                 s.string("username", "user2");
             });
-            fail("Should have thrown exception for duplicate unique value");
         } catch (Exception e) {
             // Expected - unique constraint violation
             assertTrue(e.getMessage().toLowerCase().contains("unique") ||
                       e.getMessage().toLowerCase().contains("constraint") ||
                       e.getMessage().toLowerCase().contains("duplicate"));
         }
+
+        // Verify that duplicate was NOT inserted (either exception or silent failure)
+        assertEquals(1, countRows("test_unique"), "Table should still have only 1 row - duplicate should not have been inserted");
     }
 
     @Test

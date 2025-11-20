@@ -5,6 +5,7 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -65,12 +66,12 @@ public class InsertRequest implements Executor {
                     return 0;
                 }
             } catch (Exception exception) {
-                exception.printStackTrace();
-                return -1;
+                logger.info("Insert operation failed on table: " + this.schema.getTableName() + " - Failed to retrieve generated keys - " + exception.getMessage());
+                throw new DatabaseException("insert", this.schema.getTableName(), exception);
             }
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Insert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("insert", this.schema.getTableName(), exception);
         }
     }
 }

@@ -6,6 +6,7 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -99,8 +100,8 @@ public class UpsertBatchRequest implements Executor {
 
             return preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Upsert batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("upsertBatch", firstSchema.getTableName(), exception);
         }
     }
 }

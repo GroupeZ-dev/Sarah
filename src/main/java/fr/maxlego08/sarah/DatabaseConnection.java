@@ -1,6 +1,9 @@
 package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
+import fr.maxlego08.sarah.logger.Logger;
+import fr.maxlego08.sarah.transaction.Transaction;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -12,10 +15,12 @@ import java.sql.SQLException;
 public abstract class DatabaseConnection {
 
     protected final DatabaseConfiguration databaseConfiguration;
+    protected final Logger logger;
     protected Connection connection;
 
-    public DatabaseConnection(DatabaseConfiguration databaseConfiguration) {
+    public DatabaseConnection(DatabaseConfiguration databaseConfiguration, Logger logger) {
         this.databaseConfiguration = databaseConfiguration;
+        this.logger = logger;
     }
 
     /**
@@ -46,14 +51,10 @@ public abstract class DatabaseConnection {
         }
 
         if (!isConnected(connection)) {
-            try {
-                Connection temp_connection = this.connectToDatabase();
-
-                if (isConnected(temp_connection)) {
-                    temp_connection.close();
-                }
+            try (Connection tempConnection = this.connectToDatabase()) {
+                return isConnected(tempConnection);
             } catch (Exception exception) {
-                exception.printStackTrace();
+                this.logger.info("Failed to validate database connection: " + exception.getMessage());
                 return false;
             }
         }
@@ -87,7 +88,7 @@ public abstract class DatabaseConnection {
             try {
                 connection.close();
             } catch (SQLException exception) {
-                exception.printStackTrace();
+                this.logger.info("Failed to disconnect from database: " + exception.getMessage());
             }
         }
     }
@@ -100,7 +101,8 @@ public abstract class DatabaseConnection {
             try {
                 connection = this.connectToDatabase();
             } catch (Exception exception) {
-                exception.printStackTrace();
+                this.logger.info("Failed to connect to database: " + exception.getMessage());
+                throw new DatabaseException("connect", exception);
             }
         }
     }
@@ -116,5 +118,27 @@ public abstract class DatabaseConnection {
     public Connection getConnection() {
         connect();
         return connection;
+    }
+
+    /**
+     * Begins a new database transaction.
+     * Use try-with-resources to ensure proper cleanup:
+     * <pre>
+     * try (Transaction tx = connection.beginTransaction()) {
+     *     // Execute operations
+     *     tx.commit();
+     * } // Automatically rolls back if not committed
+     * </pre>
+     *
+     * @return a new Transaction instance
+     * @throws DatabaseException if the transaction cannot be started
+     */
+    public Transaction beginTransaction() {
+        try {
+            return new Transaction(getConnection());
+        } catch (SQLException exception) {
+            this.logger.info("Failed to begin transaction: " + exception.getMessage());
+            throw new DatabaseException("begin-transaction", exception);
+        }
     }
 }

@@ -75,8 +75,8 @@ public class JoinConditionTest extends DatabaseTestBase {
     public void testLeftJoin() {
         Schema schema = SchemaBuilder.select("test_users");
         schema.addSelect("test_users", "username");
-        schema.addSelect("test_orders", "product");
-        schema.leftJoin("test_users", "u", "id", "test_orders", "user_id");
+        schema.addSelect("o", "product");
+        schema.leftJoin("test_orders", "o", "user_id", "test_users", "id");
 
         try {
             List<Map<String, Object>> results = schema.executeSelect(connection, testLogger);
@@ -101,8 +101,8 @@ public class JoinConditionTest extends DatabaseTestBase {
     public void testInnerJoin() {
         Schema schema = SchemaBuilder.select("test_users");
         schema.addSelect("test_users", "username");
-        schema.addSelect("test_orders", "product");
-        schema.innerJoin("test_users", "u", "id", "test_orders", "user_id");
+        schema.addSelect("o", "product");
+        schema.innerJoin("test_orders", "o", "user_id", "test_users", "id");
 
         try {
             List<Map<String, Object>> results = schema.executeSelect(connection, testLogger);
@@ -122,10 +122,10 @@ public class JoinConditionTest extends DatabaseTestBase {
     public void testJoinWithWhereCondition() {
         Schema schema = SchemaBuilder.select("test_users");
         schema.addSelect("test_users", "username");
-        schema.addSelect("test_orders", "product");
-        schema.addSelect("test_orders", "amount");
-        schema.innerJoin("test_users", "u", "id", "test_orders", "user_id");
-        schema.where("test_orders", "amount", ">", 50);
+        schema.addSelect("o", "product");
+        schema.addSelect("o", "amount");
+        schema.innerJoin("test_orders", "o", "user_id", "test_users", "id");
+        schema.where("o", "amount", ">", 50);
 
         try {
             List<Map<String, Object>> results = schema.executeSelect(connection, testLogger);
@@ -145,9 +145,9 @@ public class JoinConditionTest extends DatabaseTestBase {
     public void testJoinWithOrderBy() {
         Schema schema = SchemaBuilder.select("test_users");
         schema.addSelect("test_users", "username");
-        schema.addSelect("test_orders", "product");
-        schema.addSelect("test_orders", "amount");
-        schema.innerJoin("test_users", "u", "id", "test_orders", "user_id");
+        schema.addSelect("o", "product");
+        schema.addSelect("o", "amount");
+        schema.innerJoin("test_orders", "o", "user_id", "test_users", "id");
         schema.orderByDesc("amount");
 
         try {
@@ -177,10 +177,10 @@ public class JoinConditionTest extends DatabaseTestBase {
 
         Schema selectSchema = SchemaBuilder.select("test_users");
         selectSchema.addSelect("test_users", "username");
-        selectSchema.addSelect("test_orders", "product");
-        selectSchema.addSelect("test_profiles", "bio");
-        selectSchema.innerJoin("test_users", "u", "id", "test_orders", "user_id");
-        selectSchema.innerJoin("test_users", "u", "id", "test_profiles", "user_id");
+        selectSchema.addSelect("o", "product");
+        selectSchema.addSelect("p", "bio");
+        selectSchema.innerJoin("test_orders", "o", "user_id", "test_users", "id");
+        selectSchema.innerJoin("test_profiles", "p", "user_id", "test_users", "id");
 
         try {
             List<Map<String, Object>> results = selectSchema.executeSelect(connection, testLogger);

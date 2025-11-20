@@ -1,6 +1,10 @@
 package fr.maxlego08.sarah;
 
+import fr.maxlego08.sarah.logger.Logger;
+
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 
@@ -9,28 +13,26 @@ public class SqliteConnection extends DatabaseConnection {
     private final File folder;
     private String fileName = "database.db";
 
-    public SqliteConnection(DatabaseConfiguration databaseConfiguration, File folder) {
-        super(databaseConfiguration);
+    public SqliteConnection(DatabaseConfiguration databaseConfiguration, File folder, Logger logger) {
+        super(databaseConfiguration, logger);
         this.folder = folder;
     }
 
     @Override
     public Connection connectToDatabase() throws Exception {
-        if (!this.folder.exists()) {
-            this.folder.mkdirs();
-        }
+        // Thread-safe directory creation using Files API
+        Files.createDirectories(folder.toPath());
 
-        File databaseFile = new File(this.folder, this.fileName);
-        if (!databaseFile.exists()) {
-            databaseFile.createNewFile();
-        }
+        // SQLite automatically creates the file if it doesn't exist
+        Path dbPath = folder.toPath().resolve(fileName);
+        String url = "jdbc:sqlite:" + dbPath.toAbsolutePath();
 
         try {
             Class.forName("org.sqlite.JDBC");
         } catch (ClassNotFoundException ignored) {
         }
 
-        return DriverManager.getConnection("jdbc:sqlite:" + databaseFile.getAbsolutePath());
+        return DriverManager.getConnection(url);
     }
 
     public File getFolder() {

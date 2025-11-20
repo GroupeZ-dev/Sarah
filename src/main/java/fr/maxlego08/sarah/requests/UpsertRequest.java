@@ -6,6 +6,7 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -101,9 +102,8 @@ public class UpsertRequest implements Executor {
             preparedStatement.executeUpdate();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            //throw new SQLException("Failed to execute upsert: " + exception.getMessage(), exception);
-            return -1;
+            logger.info("Upsert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("upsert", this.schema.getTableName(), exception);
         }
 
     }

@@ -98,7 +98,13 @@ public abstract class DatabaseTestBase {
         try (Statement stmt = conn.createStatement()) {
             // Drop common test tables
             String[] tables = {"test_users", "test_products", "test_orders", "test_composite",
-                             "test_autoincrement", "migrations", "test_join_a", "test_join_b"};
+                             "test_autoincrement", "migrations", "test_join_a", "test_join_b",
+                             "test_create", "test_drop", "test_rename", "test_renamed", "test_index",
+                             "test_unique", "test_foreign", "test_referenced", "test_users_dto",
+                             "test_complex", "test_profiles", "test_old_name", "test_new_name",
+                             "test_parent", "test_child", "test_migration", "test_idempotent",
+                             "test_alter", "test_all_types", "test_nullable"};
+
             for (String table : tables) {
                 try {
                     if (configuration.getDatabaseType() == DatabaseType.SQLITE) {

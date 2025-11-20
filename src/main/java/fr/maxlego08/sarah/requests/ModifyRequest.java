@@ -6,6 +6,7 @@ import fr.maxlego08.sarah.SchemaBuilder;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.database.SchemaType;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.SQLException;
@@ -27,8 +28,8 @@ public class ModifyRequest implements Executor {
         try {
             tmpSchema.execute(databaseConnection, logger);
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Modify table operation failed on table: " + schema.getTableName() + " - Failed to create temporary table - " + exception.getMessage());
+            throw new DatabaseException("modify", schema.getTableName(), exception);
         }
 
         Executor executor = new InsertAllRequest(schema, tmpTableName);
