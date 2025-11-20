@@ -1,5 +1,7 @@
 package fr.maxlego08.sarah;
 
+import fr.maxlego08.sarah.logger.Logger;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.Properties;
@@ -9,8 +11,8 @@ import java.util.Properties;
  */
 public class MariaDbConnection extends DatabaseConnection {
 
-    public MariaDbConnection(DatabaseConfiguration databaseConfiguration) {
-        super(databaseConfiguration);
+    public MariaDbConnection(DatabaseConfiguration databaseConfiguration, Logger logger) {
+        super(databaseConfiguration, logger);
     }
 
     @Override

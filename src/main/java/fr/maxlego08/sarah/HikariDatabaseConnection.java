@@ -3,6 +3,8 @@ package fr.maxlego08.sarah;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
+import fr.maxlego08.sarah.logger.Logger;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -26,8 +28,8 @@ public class HikariDatabaseConnection extends DatabaseConnection {
 
     private HikariDataSource dataSource;
 
-    public HikariDatabaseConnection(DatabaseConfiguration databaseConfiguration) {
-        super(databaseConfiguration);
+    public HikariDatabaseConnection(DatabaseConfiguration databaseConfiguration, Logger logger) {
+        super(databaseConfiguration, logger);
         this.initializeDataSource();
     }
 
@@ -126,8 +128,8 @@ public class HikariDatabaseConnection extends DatabaseConnection {
         try {
             return dataSource.getConnection();
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return null;
+            this.logger.info("Failed to get connection from Hikari pool: " + exception.getMessage());
+            throw new DatabaseException("getConnection", exception);
         }
     }
 

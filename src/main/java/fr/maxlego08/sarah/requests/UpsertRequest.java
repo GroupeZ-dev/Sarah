@@ -6,6 +6,7 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -29,21 +30,33 @@ public class UpsertRequest implements Executor {
         StringBuilder valuesQuery = new StringBuilder("VALUES (");
         StringBuilder onUpdateQuery = new StringBuilder();
 
-        List<Object> values = new ArrayList<>();
+        List<Object> insertValues = new ArrayList<>();
+        List<Object> updateValues = new ArrayList<>();
 
-        for (int i = 0; i < this.schema.getColumns().size(); i++) {
-            ColumnDefinition columnDefinition = this.schema.getColumns().get(i);
-            insertQuery.append(i > 0 ? ", " : "").append(columnDefinition.getSafeName());
-            valuesQuery.append(i > 0 ? ", " : "").append("?");
-            if (i > 0) {
-                onUpdateQuery.append(", ");
+        int insertIndex = 0;
+        int updateIndex = 0;
+        for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
+            // Skip auto-increment columns in INSERT part
+            if (!columnDefinition.isAutoIncrement()) {
+                insertQuery.append(insertIndex > 0 ? ", " : "").append(columnDefinition.getSafeName());
+                valuesQuery.append(insertIndex > 0 ? ", " : "").append("?");
+                insertValues.add(columnDefinition.getObject());
+                insertIndex++;
             }
-            if (databaseType == DatabaseType.SQLITE) {
-                onUpdateQuery.append(columnDefinition.getSafeName()).append(" = excluded.").append(columnDefinition.getSafeName());
-            } else {
-                onUpdateQuery.append(columnDefinition.getSafeName()).append(" = ?");
+
+            // Skip auto-increment columns in UPDATE part as well
+            if (!columnDefinition.isAutoIncrement()) {
+                if (updateIndex > 0) {
+                    onUpdateQuery.append(", ");
+                }
+                if (databaseType == DatabaseType.SQLITE) {
+                    onUpdateQuery.append(columnDefinition.getSafeName()).append(" = excluded.").append(columnDefinition.getSafeName());
+                } else {
+                    onUpdateQuery.append(columnDefinition.getSafeName()).append(" = ?");
+                    updateValues.add(columnDefinition.getObject());
+                }
+                updateIndex++;
             }
-            values.add(columnDefinition.getObject());
         }
 
         insertQuery.append(") ");
@@ -53,9 +66,10 @@ public class UpsertRequest implements Executor {
 
         if (databaseType == DatabaseType.SQLITE) {
             StringBuilder onConflictQuery = new StringBuilder(" ON CONFLICT (");
-            List<String> primaryKeys = schema.getPrimaryKeys();
-            for (int i = 0; i < primaryKeys.size(); i++) {
-                onConflictQuery.append(i > 0 ? ", " : "").append(primaryKeys.get(i));
+            List<String> nonAutoIncrementPrimaryKeys = getNonAutoIncrementPrimaryKeys();
+
+            for (int i = 0; i < nonAutoIncrementPrimaryKeys.size(); i++) {
+                onConflictQuery.append(i > 0 ? ", " : "").append(nonAutoIncrementPrimaryKeys.get(i));
             }
             onConflictQuery.append(") DO UPDATE SET ");
             upsertQuery = insertQuery + valuesQuery.toString() + onConflictQuery + onUpdateQuery;
@@ -75,23 +89,57 @@ public class UpsertRequest implements Executor {
             int index = 1;
 
             // Setting values for INSERT part
-            for (Object value : values) {
+            for (Object value : insertValues) {
                 preparedStatement.setObject(index++, value);
             }
 
             // Setting values for UPDATE part (only if not SQLite, since SQLite uses "excluded" keyword)
             if (databaseType != DatabaseType.SQLITE) {
-                for (Object value : values) {
+                for (Object value : updateValues) {
                     preparedStatement.setObject(index++, value);
                 }
             }
             preparedStatement.executeUpdate();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            //throw new SQLException("Failed to execute upsert: " + exception.getMessage(), exception);
-            return -1;
+            logger.info("Upsert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("upsert", this.schema.getTableName(), exception);
         }
 
+    }
+
+    private List<String> getNonAutoIncrementPrimaryKeys() {
+        List<String> conflictColumns = new ArrayList<>();
+
+        // First, try to find primary keys that are not auto-increment
+        List<String> primaryKeys = schema.getPrimaryKeys();
+        for (String primaryKey : primaryKeys) {
+            boolean isAutoIncrement = false;
+            for (ColumnDefinition col : schema.getColumns()) {
+                if (col.getSafeName().equals(primaryKey) && col.isAutoIncrement()) {
+                    isAutoIncrement = true;
+                    break;
+                }
+            }
+            if (!isAutoIncrement) {
+                conflictColumns.add(primaryKey);
+            }
+        }
+
+        // If no non-auto-increment primary keys exist, look for UNIQUE columns
+        if (conflictColumns.isEmpty()) {
+            for (ColumnDefinition col : schema.getColumns()) {
+                // Check if column is unique and not auto-increment
+                if (col.isUnique() && !col.isAutoIncrement()) {
+                    conflictColumns.add(col.getSafeName());
+                }
+            }
+        }
+
+        // If still no conflict columns found, throw error
+        if (conflictColumns.isEmpty()) {
+            throw new IllegalStateException("UPSERT requires at least one non-auto-increment primary key or unique constraint for SQLite");
+        }
+        return conflictColumns;
     }
 }

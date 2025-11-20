@@ -2,6 +2,7 @@ package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.InsertBatchRequest;
 import fr.maxlego08.sarah.requests.UpdateBatchRequest;
@@ -11,6 +12,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 public class RequestHelper {
@@ -48,22 +50,9 @@ public class RequestHelper {
         try {
             SchemaBuilder.upsert(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
-            exception.printStackTrace();
+            this.logger.info("Upsert operation failed on table: " + tableName + " - " + exception.getMessage());
+            throw new DatabaseException("upsert", tableName, exception);
         }
-    }
-
-    /**
-     * Updates a table in the database using the given class template and data.
-     * The table name is inferred from the class name.
-     * The fields of the class are used to define the columns of the table.
-     * The data is used to provide values for the columns.
-     *
-     * @param tableName the name of the table
-     * @param clazz     the class template
-     * @param data      the data to be updated
-     */
-    public <T> void update(String tableName, Class<T> clazz, T data) {
-        this.update(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
     }
 
     /**
@@ -77,7 +66,8 @@ public class RequestHelper {
         try {
             SchemaBuilder.update(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
-            exception.printStackTrace();
+            this.logger.info("Update operation failed on table: " + tableName + " - " + exception.getMessage());
+            throw new DatabaseException("update", tableName, exception);
         }
     }
 
@@ -136,8 +126,9 @@ public class RequestHelper {
         try {
             consumerResult.accept(SchemaBuilder.insert(tableName, consumer).execute(this.connection, this.logger));
         } catch (SQLException exception) {
-            exception.printStackTrace();
+            this.logger.info("Insert operation failed on table: " + tableName + " - " + exception.getMessage());
             exceptionRunnable.run();
+            throw new DatabaseException("insert", tableName, exception);
         }
     }
 
@@ -156,7 +147,7 @@ public class RequestHelper {
         try {
             return schema.executeSelectCount(this.connection, this.logger);
         } catch (SQLException exception) {
-            exception.printStackTrace();
+            this.logger.info("Count operation failed on table: " + tableName + " - " + exception.getMessage());
         }
         return 0L;
     }
@@ -177,7 +168,7 @@ public class RequestHelper {
         try {
             return schema.executeSelect(clazz, this.connection, this.logger);
         } catch (Exception exception) {
-            exception.printStackTrace();
+            this.logger.info("Select operation failed on table: " + tableName + " - " + exception.getMessage());
         }
         return new ArrayList<>();
     }
@@ -198,7 +189,7 @@ public class RequestHelper {
         try {
             return schema.executeSelect(this.connection, this.logger);
         } catch (Exception exception) {
-            exception.printStackTrace();
+            this.logger.info("Select operation failed on table: " + tableName + " - " + exception.getMessage());
         }
         return new ArrayList<>();
     }
@@ -216,7 +207,7 @@ public class RequestHelper {
         try {
             return schema.executeSelect(clazz, this.connection, this.logger);
         } catch (Exception exception) {
-            exception.printStackTrace();
+            this.logger.info("SelectAll operation failed on table: " + tableName + " - " + exception.getMessage());
         }
         return new ArrayList<>();
     }
@@ -235,7 +226,8 @@ public class RequestHelper {
         try {
             schema.execute(this.connection, this.logger);
         } catch (SQLException exception) {
-            exception.printStackTrace();
+            this.logger.info("Delete operation failed on table: " + tableName + " - " + exception.getMessage());
+            throw new DatabaseException("delete", tableName, exception);
         }
     }
 
@@ -254,6 +246,25 @@ public class RequestHelper {
     }
 
     /**
+     * Executes an upsert operation on a batch of DTOs.
+     * This method converts each DTO to a Schema and then performs batch upsert operation,
+     * allowing for the insertion of new rows or updating existing rows based on primary key constraints.
+     *
+     * @param tableName the name of the table
+     * @param clazz     the class type of the DTOs
+     * @param dataList  a list of DTO objects to be upserted
+     * @param <T>       the type of the DTO
+     */
+    public <T> void upsertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+        List<Schema> schemas = new ArrayList<>();
+        for (T data : dataList) {
+            Schema schema = SchemaBuilder.upsert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
+            schemas.add(schema);
+        }
+        this.upsertMultiple(schemas);
+    }
+
+    /**
      * Executes an insert operation on a batch of schemas.
      * This method utilizes an InsertBatchRequest to perform the insert operation
      * on the provided list of schemas. Each schema in the list is inserted into
@@ -265,6 +276,25 @@ public class RequestHelper {
     public void insertMultiple(List<Schema> schemas) {
         InsertBatchRequest request = new InsertBatchRequest(schemas);
         request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
+    }
+
+    /**
+     * Executes an insert operation on a batch of DTOs.
+     * This method converts each DTO to a Schema and then performs batch insert operation,
+     * allowing for the insertion of multiple rows at once.
+     *
+     * @param tableName the name of the table
+     * @param clazz     the class type of the DTOs
+     * @param dataList  a list of DTO objects to be inserted
+     * @param <T>       the type of the DTO
+     */
+    public <T> void insertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+        List<Schema> schemas = new ArrayList<>();
+        for (T data : dataList) {
+            Schema schema = SchemaBuilder.insert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
+            schemas.add(schema);
+        }
+        this.insertMultiple(schemas);
     }
 
     /**
@@ -284,7 +314,8 @@ public class RequestHelper {
                 try {
                     schema.execute(this.connection, this.logger);
                 } catch (SQLException exception) {
-                    exception.printStackTrace();
+                    this.logger.info("UpdateMultiple operation failed for schema: " + schema.getTableName() + " - " + exception.getMessage());
+                    throw new DatabaseException("updateMultiple", schema.getTableName(), exception);
                 }
             }
             return;
@@ -292,6 +323,28 @@ public class RequestHelper {
 
         UpdateBatchRequest request = new UpdateBatchRequest(schemas);
         request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
+    }
+
+    /**
+     * Executes an update operation on a batch of DTOs.
+     * This method converts each DTO to a Schema and then performs batch update operation,
+     * allowing for modifications to existing rows based on the DTO data.
+     *
+     * <p>Note: For SQLite databases, updates are executed sequentially rather than in a single batch
+     * due to driver limitations.</p>
+     *
+     * @param tableName the name of the table
+     * @param clazz     the class type of the DTOs
+     * @param dataList  a list of DTO objects to be updated
+     * @param <T>       the type of the DTO
+     */
+    public <T> void updateMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+        List<Schema> schemas = new ArrayList<>();
+        for (T data : dataList) {
+            Schema schema = SchemaBuilder.update(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
+            schemas.add(schema);
+        }
+        this.updateMultiple(schemas);
     }
 
     /**

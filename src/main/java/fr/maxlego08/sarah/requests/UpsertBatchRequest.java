@@ -6,6 +6,7 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -36,19 +37,25 @@ public class UpsertBatchRequest implements Executor {
 
         List<Object> values = new ArrayList<>();
         List<String> placeholders = new ArrayList<>();
-        List<String> columnNames = new ArrayList<>();
+        List<String> insertColumnNames = new ArrayList<>();
 
+        // Build column list - skip auto-increment columns
         for (ColumnDefinition column : firstSchema.getColumns()) {
-            columnNames.add(column.getSafeName());
+            if (!column.isAutoIncrement()) {
+                insertColumnNames.add(column.getSafeName());
+            }
         }
 
-        insertQuery.append(String.join(", ", columnNames)).append(") ");
+        insertQuery.append(String.join(", ", insertColumnNames)).append(") ");
 
         for (Schema schema : schemas) {
             List<String> rowPlaceholders = new ArrayList<>();
             for (ColumnDefinition column : schema.getColumns()) {
-                rowPlaceholders.add("?");
-                values.add(column.getObject());
+                // Skip auto-increment columns
+                if (!column.isAutoIncrement()) {
+                    rowPlaceholders.add("?");
+                    values.add(column.getObject());
+                }
             }
             placeholders.add("(" + String.join(", ", rowPlaceholders) + ")");
         }
@@ -60,19 +67,21 @@ public class UpsertBatchRequest implements Executor {
             List<String> primaryKeys = firstSchema.getPrimaryKeys();
             onConflictQuery.append(String.join(", ", primaryKeys)).append(") DO UPDATE SET ");
 
-            for (int i = 0; i < columnNames.size(); i++) {
+            // Skip auto-increment columns in UPDATE as well
+            for (int i = 0; i < insertColumnNames.size(); i++) {
                 if (i > 0) onUpdateQuery.append(", ");
-                onUpdateQuery.append(columnNames.get(i)).append(" = excluded.").append(columnNames.get(i));
+                onUpdateQuery.append(insertColumnNames.get(i)).append(" = excluded.").append(insertColumnNames.get(i));
             }
-            
+
             insertQuery.append(valuesQuery).append(onConflictQuery).append(onUpdateQuery);
         } else {
             onUpdateQuery.append(" ON DUPLICATE KEY UPDATE ");
-            for (int i = 0; i < columnNames.size(); i++) {
+            // Skip auto-increment columns in UPDATE as well
+            for (int i = 0; i < insertColumnNames.size(); i++) {
                 if (i > 0) onUpdateQuery.append(", ");
-                onUpdateQuery.append(columnNames.get(i)).append(" = VALUES(").append(columnNames.get(i)).append(")");
+                onUpdateQuery.append(insertColumnNames.get(i)).append(" = VALUES(").append(insertColumnNames.get(i)).append(")");
             }
-            
+
             insertQuery.append(valuesQuery).append(onUpdateQuery);
         }
 
@@ -91,8 +100,8 @@ public class UpsertBatchRequest implements Executor {
 
             return preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Upsert batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("upsertBatch", firstSchema.getTableName(), exception);
         }
     }
 }

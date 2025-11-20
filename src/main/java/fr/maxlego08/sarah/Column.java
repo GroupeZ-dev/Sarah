@@ -18,4 +18,6 @@ public @interface Column {
     String type() default "";
 
     boolean nullable() default false;
+
+    boolean unique() default false;
 }

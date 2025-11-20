@@ -5,6 +5,7 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -27,15 +28,18 @@ public class InsertAllRequest implements Executor {
         StringBuilder insertBuilder = new StringBuilder("INSERT INTO " + this.toTableName + " (");
         StringBuilder columns = new StringBuilder();
 
-        int size = this.schema.getColumns().size();
-        for (int i = 0; i < size; i++) {
+        int columnIndex = 0;
+        for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
+            // Skip auto-increment columns
+            if (columnDefinition.isAutoIncrement()) {
+                continue;
+            }
 
-            ColumnDefinition columnDefinition = this.schema.getColumns().get(i);
-
-            columns.append(columnDefinition.getSafeName());
-            if (i < (size - 1)) {
+            if (columnIndex > 0) {
                 columns.append(",");
             }
+            columns.append(columnDefinition.getSafeName());
+            columnIndex++;
         }
 
         insertBuilder.append(columns).append(") ");
@@ -53,8 +57,8 @@ public class InsertAllRequest implements Executor {
         try (Connection connection = databaseConnection.getConnection(); PreparedStatement preparedStatement = connection.prepareStatement(insertQuery)) {
             preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Insert all operation failed from table: " + this.schema.getTableName() + " to table: " + this.toTableName + " - " + exception.getMessage());
+            throw new DatabaseException("insertAll", this.toTableName, exception);
         }
 
         return 0;

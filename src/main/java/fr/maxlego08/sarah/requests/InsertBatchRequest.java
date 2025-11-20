@@ -5,6 +5,7 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -37,8 +38,11 @@ public class InsertBatchRequest implements Executor {
         List<String> placeholders = new ArrayList<>();
         List<String> columnNames = new ArrayList<>();
 
+        // Skip auto-increment columns
         for (ColumnDefinition column : firstSchema.getColumns()) {
-            columnNames.add(column.getSafeName());
+            if (!column.isAutoIncrement()) {
+                columnNames.add(column.getSafeName());
+            }
         }
 
         insertQuery.append(String.join(", ", columnNames)).append(") ");
@@ -46,8 +50,11 @@ public class InsertBatchRequest implements Executor {
         for (Schema schema : schemas) {
             List<String> rowPlaceholders = new ArrayList<>();
             for (ColumnDefinition column : schema.getColumns()) {
-                rowPlaceholders.add("?");
-                values.add(column.getObject());
+                // Skip auto-increment columns
+                if (!column.isAutoIncrement()) {
+                    rowPlaceholders.add("?");
+                    values.add(column.getObject());
+                }
             }
             placeholders.add("(" + String.join(", ", rowPlaceholders) + ")");
         }
@@ -67,9 +74,9 @@ public class InsertBatchRequest implements Executor {
             for (Object value : values) {
                 preparedStatement.setObject(index++, value);
             }
-            
+
             int updatedRows = preparedStatement.executeUpdate();
-            
+
             try (ResultSet generatedKeys = preparedStatement.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
                     return generatedKeys.getInt(1);
@@ -77,8 +84,8 @@ public class InsertBatchRequest implements Executor {
             }
             return updatedRows;
         } catch (SQLException exception) {
-            exception.printStackTrace();
-            return -1;
+            logger.info("Insert batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("insertBatch", firstSchema.getTableName(), exception);
         }
     }
 }
