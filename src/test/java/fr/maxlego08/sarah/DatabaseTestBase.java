@@ -1,6 +1,7 @@
 package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.logger.JULogger;
 import fr.maxlego08.sarah.logger.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,20 +65,21 @@ public abstract class DatabaseTestBase {
      * Create database connection based on configuration
      */
     protected DatabaseConnection createConnection() {
+        Logger logger = JULogger.from(java.util.logging.Logger.getLogger("TEST"));
         DatabaseType type = configuration.getDatabaseType();
         switch (type) {
             case SQLITE:
                 // SqliteConnection expects a folder, not a file
                 // It will create a file named "database.db" inside that folder
                 // So we pass the current directory and set the filename
-                SqliteConnection sqliteConnection = new SqliteConnection(configuration, new File("."));
+                SqliteConnection sqliteConnection = new SqliteConnection(configuration, new File("."), logger);
                 sqliteConnection.setFileName(getSqlitePath());
                 this.sqliteFile = sqliteConnection.getFolder().toPath().resolve(this.getSqlitePath()).toFile();
                 return sqliteConnection;
             case MYSQL:
-                return new MySqlConnection(configuration);
+                return new MySqlConnection(configuration, logger);
             case MARIADB:
-                return new MariaDbConnection(configuration);
+                return new MariaDbConnection(configuration, logger);
             default:
                 throw new IllegalArgumentException("Unsupported database type: " + type);
         }
