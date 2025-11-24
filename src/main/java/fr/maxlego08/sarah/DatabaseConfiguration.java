@@ -42,39 +42,39 @@ public class DatabaseConfiguration {
     }
 
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database, DatabaseType databaseType) {
-        return new DatabaseConfiguration(null, user, password, port, host, database, false, databaseType);
+        return new DatabaseConfiguration("", user, password, port, host, database, false, databaseType);
     }
 
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database) {
-        return new DatabaseConfiguration(null, user, password, port, host, database, false, DatabaseType.MYSQL);
+        return new DatabaseConfiguration("", user, password, port, host, database, false, DatabaseType.MYSQL);
     }
 
     public static DatabaseConfiguration createMariaDb(String user, String password, int port, String host, String database) {
-        return new DatabaseConfiguration(null, user, password, port, host, database, false, DatabaseType.MARIADB);
+        return new DatabaseConfiguration("", user, password, port, host, database, false, DatabaseType.MARIADB);
     }
 
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database, boolean debug) {
-        return new DatabaseConfiguration(null, user, password, port, host, database, debug, DatabaseType.MYSQL);
+        return new DatabaseConfiguration("", user, password, port, host, database, debug, DatabaseType.MYSQL);
     }
 
     public static DatabaseConfiguration createMariaDb(String user, String password, int port, String host, String database, boolean debug) {
-        return new DatabaseConfiguration(null, user, password, port, host, database, debug, DatabaseType.MARIADB);
+        return new DatabaseConfiguration("", user, password, port, host, database, debug, DatabaseType.MARIADB);
     }
 
     public static DatabaseConfiguration create(String user, String password, String host, String database, DatabaseType databaseType) {
-        return new DatabaseConfiguration(null, user, password, 3306, host, database, false, databaseType);
+        return new DatabaseConfiguration("", user, password, 3306, host, database, false, databaseType);
     }
 
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database, boolean debug, DatabaseType databaseType) {
-        return new DatabaseConfiguration(null, user, password, port, host, database, debug, databaseType);
+        return new DatabaseConfiguration("", user, password, port, host, database, debug, databaseType);
     }
 
     public static DatabaseConfiguration createMariaDb(String user, String password, String host, String database) {
-        return new DatabaseConfiguration(null, user, password, 3306, host, database, false, DatabaseType.MARIADB);
+        return new DatabaseConfiguration("", user, password, 3306, host, database, false, DatabaseType.MARIADB);
     }
 
     public static DatabaseConfiguration sqlite(boolean debug) {
-        return new DatabaseConfiguration(null, null, null, 0, null, null, debug, DatabaseType.SQLITE);
+        return new DatabaseConfiguration("", null, null, 0, null, null, debug, DatabaseType.SQLITE);
     }
 
     public String replacePrefix(String tableName) {
