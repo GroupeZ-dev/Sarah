@@ -46,3 +46,4 @@ bin/
 .DS_Store
 *.java~
 *.xml~
+CLAUDE.md
