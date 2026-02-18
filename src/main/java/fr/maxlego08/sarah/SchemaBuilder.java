@@ -338,6 +338,11 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema enumValue(String columnName) {
+        return addColumn(new ColumnDefinition(columnName, "VARCHAR").setLength(255));
+    }
+
+    @Override
     public Schema enumValue(String columnName, Enum<?> value) {
         return this.addColumn(new ColumnDefinition(columnName).setObject(value.name()));
     }

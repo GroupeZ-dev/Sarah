@@ -176,6 +176,15 @@ public interface Schema {
     Schema blob(String columnName);
 
     /**
+     * Creates a column of type VARCHAR to store an enum value.
+     * The enum will be stored as a string using its name() method.
+     *
+     * @param columnName the name of the column
+     * @return the current schema builder
+     */
+    Schema enumValue(String columnName);
+
+    /**
      * Creates a column of type VARCHAR with an enum value.
      * The enum will be stored as a string using its name() method.
      *

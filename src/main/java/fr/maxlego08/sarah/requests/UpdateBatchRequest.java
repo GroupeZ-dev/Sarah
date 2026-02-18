@@ -50,8 +50,16 @@ public class UpdateBatchRequest implements Executor {
             logger.info("Executing SQL Batch: " + updateSql);
         }
 
-        try (Connection connection = databaseConnection.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(updateSql)) {
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+        boolean originalAutoCommit = true;
+
+        try {
+            connection = databaseConnection.getConnection();
+            originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+
+            preparedStatement = connection.prepareStatement(updateSql);
 
             for (Schema schema : schemas) {
                 List<ColumnDefinition> schemaColumns = schema.getColumns();
@@ -63,6 +71,8 @@ public class UpdateBatchRequest implements Executor {
             }
 
             int[] results = preparedStatement.executeBatch();
+            connection.commit();
+
             int total = 0;
             for (int count : results) {
                 total += count;
@@ -70,8 +80,29 @@ public class UpdateBatchRequest implements Executor {
             return total;
 
         } catch (SQLException exception) {
+            if (connection != null) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackException) {
+                    logger.info("Rollback failed: " + rollbackException.getMessage());
+                }
+            }
             logger.info("Update batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("updateBatch", firstSchema.getTableName(), exception);
+        } finally {
+            if (preparedStatement != null) {
+                try {
+                    preparedStatement.close();
+                } catch (SQLException ignored) {
+                }
+            }
+            if (connection != null) {
+                try {
+                    connection.setAutoCommit(originalAutoCommit);
+                    connection.close();
+                } catch (SQLException ignored) {
+                }
+            }
         }
     }
 }
