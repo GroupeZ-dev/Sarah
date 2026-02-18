@@ -90,7 +90,13 @@ public class ConsumerConstructor {
                     }
                 } else {
                     try {
-                        schemaFromType(schema, typeName, name, data == null ? null : field.get(data));
+                        Class<?> fieldType = (Class<?>) type;
+                        if (isEnumType(fieldType)) {
+                            boolean useNativeEnum = column != null && column.useNativeEnum();
+                            handleEnumType(schema, name, fieldType, data == null ? null : field.get(data), useNativeEnum);
+                        } else {
+                            schemaFromType(schema, typeName, name, data == null ? null : field.get(data));
+                        }
                     } catch (IllegalAccessException e) {
                         throw new RuntimeException(e);
                     }
@@ -201,6 +207,50 @@ public class ConsumerConstructor {
                 break;
             default:
                 throw new IllegalArgumentException("Type " + type + " is not supported");
+        }
+    }
+
+    /**
+     * Checks if the given class is an enum type.
+     *
+     * @param clazz the class to check
+     * @return true if the class is an enum, false otherwise
+     */
+    public static boolean isEnumType(Class<?> clazz) {
+        return clazz.isEnum();
+    }
+
+    /**
+     * Handles enum types by adding them to the schema.
+     * Enums are stored as VARCHAR columns using their name() method.
+     *
+     * @param schema the schema to add the column to
+     * @param name   the name of the column
+     * @param object the enum value, or null if no value is provided
+     */
+    public static void handleEnumType(Schema schema, String name, Object object) {
+        handleEnumType(schema, name, null, object, false);
+    }
+
+    /**
+     * Handles enum types by adding them to the schema.
+     * When useNativeEnum is true, uses the native ENUM database type (MySQL/MariaDB).
+     * Otherwise, enums are stored as VARCHAR columns using their name() method.
+     *
+     * @param schema        the schema to add the column to
+     * @param name          the name of the column
+     * @param enumClass     the enum class (used for native ENUM type)
+     * @param object        the enum value, or null if no value is provided
+     * @param useNativeEnum whether to use native ENUM type
+     */
+    @SuppressWarnings("unchecked")
+    public static void handleEnumType(Schema schema, String name, Class<?> enumClass, Object object, boolean useNativeEnum) {
+        if (useNativeEnum && enumClass != null && enumClass.isEnum()) {
+            schema.enumType(name, (Class<? extends Enum>) enumClass);
+        } else if (object == null) {
+            schema.enumValue(name);
+        } else {
+            schema.enumValue(name, (Enum<?>) object);
         }
     }
 

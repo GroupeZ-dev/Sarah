@@ -176,6 +176,39 @@ public interface Schema {
     Schema blob(String columnName);
 
     /**
+     * Creates a column of type VARCHAR with an enum value.
+     * The enum will be stored as a string using its name() method.
+     *
+     * @param columnName the name of the column
+     * @param value      the enum value to store
+     * @return the current schema builder
+     */
+    Schema enumValue(String columnName, Enum<?> value);
+
+    /**
+     * Creates a column of type ENUM with the specified possible values.
+     * For MySQL/MariaDB, this creates a native ENUM column.
+     * For SQLite, this creates a TEXT column (ENUM not supported).
+     *
+     * @param columnName the name of the column
+     * @param values     the possible enum values
+     * @return the current schema builder
+     */
+    Schema enumType(String columnName, String... values);
+
+    /**
+     * Creates a column of type ENUM using an enum class to define possible values.
+     * For MySQL/MariaDB, this creates a native ENUM column with all enum constants.
+     * For SQLite, this creates a TEXT column (ENUM not supported).
+     *
+     * @param columnName the name of the column
+     * @param enumClass  the enum class whose constants define the possible values
+     * @param <E>        the enum type
+     * @return the current schema builder
+     */
+    <E extends Enum<E>> Schema enumType(String columnName, Class<E> enumClass);
+
+    /**
      * Creates a column of type BLOB with the given default value.
      * The given default value is a byte array that is directly used as the default value of the column.
      *
