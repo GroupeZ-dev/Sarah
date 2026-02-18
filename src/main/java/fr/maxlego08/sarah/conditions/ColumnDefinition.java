@@ -3,6 +3,10 @@ package fr.maxlego08.sarah.conditions;
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.database.DatabaseType;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
 public class ColumnDefinition {
 
     private String name;
@@ -16,6 +20,7 @@ public class ColumnDefinition {
     private Object object;
     private boolean isAutoIncrement;
     private boolean unique = false;
+    private List<String> enumValues;
 
     public ColumnDefinition(String name, String type) {
         this.name = name;
@@ -43,7 +48,19 @@ public class ColumnDefinition {
 
         StringBuilder columnSQL = new StringBuilder("`" + name + "` " + columnType);
 
-        if (length != 0 && decimal != 0) {
+        // Handle ENUM type with values
+        if (enumValues != null && !enumValues.isEmpty()) {
+            if (databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
+                // SQLite doesn't support ENUM, use TEXT instead
+                columnSQL = new StringBuilder("`" + name + "` TEXT");
+            } else {
+                // MySQL/MariaDB ENUM syntax: ENUM('value1', 'value2', ...)
+                String values = enumValues.stream()
+                        .map(v -> "'" + v.replace("'", "''") + "'")
+                        .collect(Collectors.joining(", "));
+                columnSQL = new StringBuilder("`" + name + "` ENUM(" + values + ")");
+            }
+        } else if (length != 0 && decimal != 0) {
             columnSQL.append("(").append(length).append(",").append(decimal).append(")");
         } else if (length != 0) {
             columnSQL.append("(").append(length).append(")");
@@ -183,6 +200,27 @@ public class ColumnDefinition {
 
     public ColumnDefinition setAutoIncrement(boolean isAutoIncrement) {
         this.isAutoIncrement = isAutoIncrement;
+        return this;
+    }
+
+    public List<String> getEnumValues() {
+        return enumValues;
+    }
+
+    public ColumnDefinition setEnumValues(List<String> enumValues) {
+        this.enumValues = enumValues;
+        return this;
+    }
+
+    public ColumnDefinition setEnumValues(String... enumValues) {
+        this.enumValues = Arrays.asList(enumValues);
+        return this;
+    }
+
+    public <E extends Enum<E>> ColumnDefinition setEnumValues(Class<E> enumClass) {
+        this.enumValues = Arrays.stream(enumClass.getEnumConstants())
+                .map(Enum::name)
+                .collect(Collectors.toList());
         return this;
     }
 }

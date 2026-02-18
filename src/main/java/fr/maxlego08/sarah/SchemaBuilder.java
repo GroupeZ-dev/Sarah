@@ -338,6 +338,26 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema enumValue(String columnName) {
+        return addColumn(new ColumnDefinition(columnName, "VARCHAR").setLength(255));
+    }
+
+    @Override
+    public Schema enumValue(String columnName, Enum<?> value) {
+        return this.addColumn(new ColumnDefinition(columnName).setObject(value.name()));
+    }
+
+    @Override
+    public Schema enumType(String columnName, String... values) {
+        return addColumn(new ColumnDefinition(columnName, "ENUM").setEnumValues(values));
+    }
+
+    @Override
+    public <E extends Enum<E>> Schema enumType(String columnName, Class<E> enumClass) {
+        return addColumn(new ColumnDefinition(columnName, "ENUM").setEnumValues(enumClass));
+    }
+
+    @Override
     public Schema blob(String columnName, Object object) {
         try {
             byte[] serializedObject = serializeObject(object);
