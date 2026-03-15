@@ -372,7 +372,7 @@ public class SchemaBuilder implements Schema {
         if (this.columns.isEmpty()) throw new IllegalStateException("No column defined to apply foreign key.");
         ColumnDefinition lastColumn = this.columns.get(this.columns.size() - 1);
 
-        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE CASCADE", lastColumn.getSafeName(), referenceTable, lastColumn.getSafeName());
+        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE CASCADE", lastColumn.getSafeName(), safeTable(referenceTable), lastColumn.getSafeName());
         this.foreignKeys.add(fkDefinition);
         return this;
     }
@@ -382,9 +382,17 @@ public class SchemaBuilder implements Schema {
         if (this.columns.isEmpty()) throw new IllegalStateException("No column defined to apply foreign key.");
         ColumnDefinition lastColumn = this.columns.get(this.columns.size() - 1);
 
-        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(%s)%s", lastColumn.getSafeName(), referenceTable, columnName, onCascade ? " ON DELETE CASCADE" : "");
+        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(`%s`)%s", lastColumn.getSafeName(), safeTable(referenceTable), columnName, onCascade ? " ON DELETE CASCADE" : "");
         this.foreignKeys.add(fkDefinition);
         return this;
+    }
+
+    /**
+     * Wraps a table name in backticks for safe SQL identifier quoting.
+     * Works with %prefix% placeholders since they are replaced after SQL generation.
+     */
+    private String safeTable(String tableName) {
+        return "`" + tableName + "`";
     }
 
     @Override
