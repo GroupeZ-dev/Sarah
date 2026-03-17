@@ -3,6 +3,7 @@ package fr.maxlego08.sarah.requests;
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
+import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
@@ -51,6 +52,11 @@ public class CreateRequest implements Executor {
         }
 
         createTableSQL.append(")");
+
+        // Force InnoDB engine for MySQL/MariaDB to ensure foreign key support
+        if (databaseConfiguration.getDatabaseType() != DatabaseType.SQLITE) {
+            createTableSQL.append(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
 
         String finalQuery = databaseConfiguration.replacePrefix(createTableSQL.toString());
         if (databaseConfiguration.isDebug()) {
