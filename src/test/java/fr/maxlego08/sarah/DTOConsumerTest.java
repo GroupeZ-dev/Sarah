@@ -95,6 +95,34 @@ public class DTOConsumerTest extends DatabaseTestBase {
         public Boolean getBoolField() { return boolField; }
     }
 
+    private static class OverloadedTemplateDTO {
+        private final String name;
+        private final Integer quantity;
+
+        public OverloadedTemplateDTO(String name) {
+            this(name, null);
+        }
+
+        public OverloadedTemplateDTO(String name, Integer quantity) {
+            this.name = name;
+            this.quantity = quantity;
+        }
+    }
+
+    private static class IncompatibleTemplateDTO {
+        private final String code;
+        private final Integer version;
+
+        public IncompatibleTemplateDTO() {
+            this(null);
+        }
+
+        public IncompatibleTemplateDTO(String code) {
+            this.code = code;
+            this.version = null;
+        }
+    }
+
     @Test
     public void testCreateTableFromDTOClass() throws Exception {
         // Create table using DTO class template
@@ -303,5 +331,17 @@ public class DTOConsumerTest extends DatabaseTestBase {
         assertEquals(42, retrieved.getIntField());
         assertEquals(3.14, retrieved.getDoubleField(), 0.001);
         assertTrue(retrieved.getBoolField());
+    }
+
+    @Test
+    public void testCreateConsumerWithOverloadedConstructors() {
+        assertDoesNotThrow(() -> ConsumerConstructor.createConsumerFromTemplate(OverloadedTemplateDTO.class, null));
+    }
+
+    @Test
+    public void testCreateConsumerThrowsWhenNoCompatibleConstructorExists() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> ConsumerConstructor.createConsumerFromTemplate(IncompatibleTemplateDTO.class, null));
+        assertEquals("Fields count does not match constructor parameters count", exception.getMessage());
     }
 }

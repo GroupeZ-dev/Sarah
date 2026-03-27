@@ -37,8 +37,6 @@ public class ConsumerConstructor {
      */
     public static Consumer<Schema> createConsumerFromTemplate(Class<?> template, Object data) {
         Constructor<?>[] constructors = template.getDeclaredConstructors();
-        Constructor<?> firstConstructor = constructors[0];
-        firstConstructor.setAccessible(true);
 
         Field[] allFields = template.getDeclaredFields();
         // Filter out synthetic fields (added by compiler for local/anonymous classes)
@@ -46,12 +44,13 @@ public class ConsumerConstructor {
                 .filter(f -> !f.isSynthetic())
                 .toArray(Field[]::new);
 
-        // For local/anonymous classes, count only non-synthetic constructor parameters
-        long nonSyntheticParamCount = Arrays.stream(firstConstructor.getParameters())
-                .filter(p -> !p.isSynthetic())
-                .count();
+        boolean hasCompatibleConstructor = Arrays.stream(constructors)
+                .peek(constructor -> constructor.setAccessible(true))
+                .anyMatch(constructor -> Arrays.stream(constructor.getParameters())
+                        .filter(p -> !p.isSynthetic())
+                        .count() == fields.length);
 
-        if (fields.length != nonSyntheticParamCount) {
+        if (!hasCompatibleConstructor) {
             throw new IllegalArgumentException("Fields count does not match constructor parameters count");
         }
 
