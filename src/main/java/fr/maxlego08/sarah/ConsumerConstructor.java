@@ -39,9 +39,10 @@ public class ConsumerConstructor {
         Constructor<?>[] constructors = template.getDeclaredConstructors();
 
         Field[] allFields = template.getDeclaredFields();
-        // Filter out synthetic fields (added by compiler for local/anonymous classes)
+        // Filter out synthetic fields and those annotated with @TransientField
         Field[] fields = Arrays.stream(allFields)
                 .filter(f -> !f.isSynthetic())
+                .filter(f -> !f.isAnnotationPresent(TransientField.class))
                 .toArray(Field[]::new);
 
         boolean hasCompatibleConstructor = Arrays.stream(constructors)
