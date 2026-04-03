@@ -37,21 +37,21 @@ public class ConsumerConstructor {
      */
     public static Consumer<Schema> createConsumerFromTemplate(Class<?> template, Object data) {
         Constructor<?>[] constructors = template.getDeclaredConstructors();
-        Constructor<?> firstConstructor = constructors[0];
-        firstConstructor.setAccessible(true);
 
         Field[] allFields = template.getDeclaredFields();
-        // Filter out synthetic fields (added by compiler for local/anonymous classes)
+        // Filter out synthetic fields and those annotated with @TransientField
         Field[] fields = Arrays.stream(allFields)
                 .filter(f -> !f.isSynthetic())
+                .filter(f -> !f.isAnnotationPresent(TransientField.class))
                 .toArray(Field[]::new);
 
-        // For local/anonymous classes, count only non-synthetic constructor parameters
-        long nonSyntheticParamCount = Arrays.stream(firstConstructor.getParameters())
-                .filter(p -> !p.isSynthetic())
-                .count();
+        boolean hasCompatibleConstructor = Arrays.stream(constructors)
+                .peek(constructor -> constructor.setAccessible(true))
+                .anyMatch(constructor -> Arrays.stream(constructor.getParameters())
+                        .filter(p -> !p.isSynthetic())
+                        .count() == fields.length);
 
-        if (fields.length != nonSyntheticParamCount) {
+        if (!hasCompatibleConstructor) {
             throw new IllegalArgumentException("Fields count does not match constructor parameters count");
         }
 
@@ -148,13 +148,14 @@ public class ConsumerConstructor {
      * </ul>
      * <p>
      * If the type is not supported, an {@link IllegalArgumentException} is thrown.
+     * If the object is not compatible with the type, an {@link IllegalArgumentException} is thrown.
      * <p>
      * @param schema the schema to add the column to
      * @param type the type of the column
      * @param name the name of the column
      * @param object the value of the column, or null if the column should be added without a value
      */
-    private static void schemaFromType(Schema schema, String type, String name, Object object) {
+    private static void schemaFromType(Schema schema, String type, String name, Object object) throws IllegalArgumentException {
         switch (type.toLowerCase()) {
             case "string":
                 if (object == null) {
@@ -174,15 +175,29 @@ public class ConsumerConstructor {
                     schema.bigInt(name);
                     break;
                 }
-                schema.bigInt(name, Long.parseLong(object.toString()));
-                break;
+                if (object instanceof Number) {
+                    schema.bigInt(name, ((Number) object).longValue());
+                    break;
+                }
+                if (object instanceof String) {
+                    try {
+                        schema.bigInt(name, Long.parseLong((String) object));
+                        break;
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("Object is not a valid number for type " + type);
+                    }
+                }
+                throw new IllegalArgumentException("Object is not a number for type " + type);
             case "boolean":
                 if (object == null) {
                     schema.bool(name);
                     break;
                 }
-                schema.bool(name, (Boolean) object);
-                break;
+                if (object instanceof Boolean) {
+                    schema.bool(name, (Boolean) object);
+                    break;
+                }
+                throw new IllegalArgumentException("Object is not a boolean for type " + type);
             case "double":
             case "float":
             case "bigdecimal":
@@ -190,18 +205,31 @@ public class ConsumerConstructor {
                     schema.decimal(name);
                     break;
                 }
-                schema.decimal(name, (Double) object);
-                break;
+                if (object instanceof Number) {
+                    schema.decimal(name, ((Number) object));
+                    break;
+                }
+                throw new IllegalArgumentException("Object is not a number for type " + type);
             case "uuid":
                 if (object == null) {
                     schema.uuid(name);
                     break;
                 }
-                schema.uuid(name, (UUID) object);
-                break;
+                if (object instanceof UUID) {
+                    schema.uuid(name, (UUID) object);
+                    break;
+                }
+                throw new IllegalArgumentException("Object is not a UUID for type " + type);
             case "date":
-                schema.date(name, (Date) object).nullable();
-                break;
+                if (object == null) {
+                    schema.date(name, null).nullable();
+                    break;
+                }
+                if (object instanceof Date) {
+                    schema.date(name, (Date) object).nullable();
+                    break;
+                }
+                throw new IllegalArgumentException("Object is not a Date for type " + type);
             case "timestamp":
                 schema.timestamp(name).nullable();
                 break;
