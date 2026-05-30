@@ -5,6 +5,8 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -26,8 +28,9 @@ public class InsertRequest implements Executor {
 
     @Override
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
 
-        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + this.schema.getTableName() + " (");
+        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + dialect.quoteTableReference(this.schema.getTableName()) + " (");
         StringBuilder valuesQuery = new StringBuilder("VALUES (");
 
         List<Object> values = new ArrayList<>();
@@ -38,7 +41,7 @@ public class InsertRequest implements Executor {
             if (columnDefinition.isAutoIncrement()) {
                 continue;
             }
-            insertQuery.append(paramIndex > 0 ? ", " : "").append(columnDefinition.getSafeName());
+            insertQuery.append(paramIndex > 0 ? ", " : "").append(dialect.quoteIdentifier(columnDefinition.getName()));
             valuesQuery.append(paramIndex > 0 ? ", " : "").append("?");
             values.add(columnDefinition.getObject());
             paramIndex++;

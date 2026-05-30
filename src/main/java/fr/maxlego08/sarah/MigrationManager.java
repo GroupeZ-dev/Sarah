@@ -4,12 +4,11 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Migration;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -106,42 +105,10 @@ public class MigrationManager {
                 List<ColumnDefinition> mustBeAdd = new ArrayList<>();
 
                 String tableName = schema.getTableName();
-                tableName = tableName.replace("%prefix%", databaseConnection.getDatabaseConfiguration().getTablePrefix());
+                tableName = databaseConnection.getDatabaseConfiguration().replacePrefix(tableName);
 
-                if (databaseConnection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.SQLITE) {
-                    try (Connection connection = databaseConnection.getConnection();
-                         PreparedStatement preparedStatement = connection.prepareStatement(String.format("PRAGMA table_info(%s)", tableName))) {
-                        List<ColumnDefinition> columnDefinitions = schema.getColumns();
-                        logger.info("Executing SQL: " + String.format("PRAGMA table_info(%s)", tableName));
-                        try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                            while (resultSet.next()) {
-                                String columnName = resultSet.getString("name");
-                                columnDefinitions.removeIf(column -> column.getName().equals(columnName));
-                            }
-                        }
-                        mustBeAdd.addAll(columnDefinitions);
-                    } catch (SQLException exception) {
-                        logger.info("Failed to get table info for migration: " + exception.getMessage());
-                        throw new DatabaseException("migration-table-info", tableName, exception);
-                    }
-                } else {
-                    for (ColumnDefinition column : schema.getColumns()) {
-                        Schema columnExistQuery;
-                        long result;
-                        columnExistQuery = SchemaBuilder.selectCount("information_schema.COLUMNS")
-                                .where("TABLE_NAME", tableName)
-                                .where("TABLE_SCHEMA", databaseConnection.getDatabaseConfiguration().getDatabase())
-                                .where("COLUMN_NAME", column.getName());
-                        try {
-                            result = columnExistQuery.executeSelectCount(databaseConnection, logger);
-                        } catch (SQLException e) {
-                            throw new RuntimeException(e);
-                        }
-                        if (result == 0) {
-                            mustBeAdd.add(column);
-                        }
-                    }
-                }
+                SqlDialect dialect = SqlDialects.from(databaseConnection.getDatabaseConfiguration().getDatabaseType());
+                mustBeAdd.addAll(dialect.missingColumns(databaseConnection, logger, tableName, schema.getColumns()));
 
                 if (mustBeAdd.isEmpty()) {
                     return;

@@ -6,6 +6,8 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -25,8 +27,8 @@ public class UpsertRequest implements Executor {
 
     @Override
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
-        DatabaseType databaseType = databaseConfiguration.getDatabaseType();
-        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + this.schema.getTableName() + " (");
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
+        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + dialect.quoteTableReference(this.schema.getTableName()) + " (");
         StringBuilder valuesQuery = new StringBuilder("VALUES (");
         StringBuilder onUpdateQuery = new StringBuilder();
 
@@ -38,21 +40,16 @@ public class UpsertRequest implements Executor {
         for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
             // Skip auto-increment columns in INSERT part
             if (!columnDefinition.isAutoIncrement()) {
-                insertQuery.append(insertIndex > 0 ? ", " : "").append(columnDefinition.getSafeName());
+                String quotedColumn = dialect.quoteIdentifier(columnDefinition.getName());
+                insertQuery.append(insertIndex > 0 ? ", " : "").append(quotedColumn);
                 valuesQuery.append(insertIndex > 0 ? ", " : "").append("?");
                 insertValues.add(columnDefinition.getObject());
                 insertIndex++;
-            }
-
-            // Skip auto-increment columns in UPDATE part as well
-            if (!columnDefinition.isAutoIncrement()) {
                 if (updateIndex > 0) {
                     onUpdateQuery.append(", ");
                 }
-                if (databaseType == DatabaseType.SQLITE) {
-                    onUpdateQuery.append(columnDefinition.getSafeName()).append(" = excluded.").append(columnDefinition.getSafeName());
-                } else {
-                    onUpdateQuery.append(columnDefinition.getSafeName()).append(" = ?");
+                onUpdateQuery.append(dialect.upsertUpdateExpression(quotedColumn, false));
+                if (dialect.usesUpsertUpdateParameters(false)) {
                     updateValues.add(columnDefinition.getObject());
                 }
                 updateIndex++;
@@ -62,21 +59,7 @@ public class UpsertRequest implements Executor {
         insertQuery.append(") ");
         valuesQuery.append(")");
 
-        String upsertQuery;
-
-        if (databaseType == DatabaseType.SQLITE) {
-            StringBuilder onConflictQuery = new StringBuilder(" ON CONFLICT (");
-            List<String> nonAutoIncrementPrimaryKeys = getNonAutoIncrementPrimaryKeys();
-
-            for (int i = 0; i < nonAutoIncrementPrimaryKeys.size(); i++) {
-                onConflictQuery.append(i > 0 ? ", " : "").append(nonAutoIncrementPrimaryKeys.get(i));
-            }
-            onConflictQuery.append(") DO UPDATE SET ");
-            upsertQuery = insertQuery + valuesQuery.toString() + onConflictQuery + onUpdateQuery;
-        } else {
-            onUpdateQuery.insert(0, " ON DUPLICATE KEY UPDATE ");
-            upsertQuery = insertQuery + valuesQuery.toString() + onUpdateQuery;
-        }
+        String upsertQuery = insertQuery + valuesQuery.toString() + dialect.upsertConflictClause(schema) + onUpdateQuery;
 
         String finalQuery = databaseConfiguration.replacePrefix(upsertQuery);
         if (databaseConfiguration.isDebug()) {
@@ -93,8 +76,7 @@ public class UpsertRequest implements Executor {
                 preparedStatement.setObject(index++, value);
             }
 
-            // Setting values for UPDATE part (only if not SQLite, since SQLite uses "excluded" keyword)
-            if (databaseType != DatabaseType.SQLITE) {
+            if (dialect.usesUpsertUpdateParameters(false)) {
                 for (Object value : updateValues) {
                     preparedStatement.setObject(index++, value);
                 }
@@ -106,40 +88,5 @@ public class UpsertRequest implements Executor {
             throw new DatabaseException("upsert", this.schema.getTableName(), exception);
         }
 
-    }
-
-    private List<String> getNonAutoIncrementPrimaryKeys() {
-        List<String> conflictColumns = new ArrayList<>();
-
-        // First, try to find primary keys that are not auto-increment
-        List<String> primaryKeys = schema.getPrimaryKeys();
-        for (String primaryKey : primaryKeys) {
-            boolean isAutoIncrement = false;
-            for (ColumnDefinition col : schema.getColumns()) {
-                if (col.getSafeName().equals(primaryKey) && col.isAutoIncrement()) {
-                    isAutoIncrement = true;
-                    break;
-                }
-            }
-            if (!isAutoIncrement) {
-                conflictColumns.add(primaryKey);
-            }
-        }
-
-        // If no non-auto-increment primary keys exist, look for UNIQUE columns
-        if (conflictColumns.isEmpty()) {
-            for (ColumnDefinition col : schema.getColumns()) {
-                // Check if column is unique and not auto-increment
-                if (col.isUnique() && !col.isAutoIncrement()) {
-                    conflictColumns.add(col.getSafeName());
-                }
-            }
-        }
-
-        // If still no conflict columns found, throw error
-        if (conflictColumns.isEmpty()) {
-            throw new IllegalStateException("UPSERT requires at least one non-auto-increment primary key or unique constraint for SQLite");
-        }
-        return conflictColumns;
     }
 }

@@ -1,6 +1,7 @@
 package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.transaction.Transaction;
@@ -42,11 +43,7 @@ public abstract class DatabaseConnection {
         DatabaseType databaseType = this.databaseConfiguration.getDatabaseType();
 
         try {
-            if (databaseType == DatabaseType.MARIADB) {
-                Class.forName("org.mariadb.jdbc.Driver");
-            } else {
-                Class.forName("com.mysql.cj.jdbc.Driver");
-            }
+            Class.forName(SqlDialects.from(databaseType).driverClassName());
         } catch (Exception ignored) {
         }
 

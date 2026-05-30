@@ -5,6 +5,8 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -30,8 +32,9 @@ public class InsertBatchRequest implements Executor {
             return 0;
         }
 
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
         Schema firstSchema = schemas.get(0);
-        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + firstSchema.getTableName() + " (");
+        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + dialect.quoteTableReference(firstSchema.getTableName()) + " (");
         StringBuilder valuesQuery = new StringBuilder("VALUES ");
 
         List<Object> values = new ArrayList<>();
@@ -41,7 +44,7 @@ public class InsertBatchRequest implements Executor {
         // Skip auto-increment columns
         for (ColumnDefinition column : firstSchema.getColumns()) {
             if (!column.isAutoIncrement()) {
-                columnNames.add(column.getSafeName());
+                columnNames.add(dialect.quoteIdentifier(column.getName()));
             }
         }
 

@@ -2,6 +2,8 @@ package fr.maxlego08.sarah.conditions;
 
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 
 import java.util.Arrays;
 import java.util.List;
@@ -38,47 +40,30 @@ public class ColumnDefinition {
      * @return The SQL string representation of the column
      */
     public String build(DatabaseConfiguration databaseConfiguration) {
-        // For SQLite autoincrement, use INTEGER instead of BIGINT/INT
-        String columnType = type;
-        if (isAutoIncrement && databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
-            if (type.equalsIgnoreCase("BIGINT") || type.equalsIgnoreCase("INT") || type.equalsIgnoreCase("INTEGER")) {
-                columnType = "INTEGER";
+        return build(databaseConfiguration, SqlDialects.from(databaseConfiguration.getDatabaseType()));
+    }
+
+    public String build(DatabaseConfiguration databaseConfiguration, SqlDialect dialect) {
+        if (isAutoIncrement && isPrimaryKey && databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
+            StringBuilder sqliteAutoIncrement = new StringBuilder(dialect.quoteIdentifier(name)).append(" INTEGER PRIMARY KEY AUTOINCREMENT");
+            if (unique) {
+                sqliteAutoIncrement.append(" UNIQUE");
             }
+            return sqliteAutoIncrement.toString();
         }
 
-        StringBuilder columnSQL = new StringBuilder("`" + name + "` " + columnType);
+        StringBuilder columnSQL = new StringBuilder(dialect.quoteIdentifier(name)).append(" ");
 
-        // Handle ENUM type with values
-        if (enumValues != null && !enumValues.isEmpty()) {
-            if (databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
-                // SQLite doesn't support ENUM, use TEXT instead
-                columnSQL = new StringBuilder("`" + name + "` TEXT");
-            } else {
-                // MySQL/MariaDB ENUM syntax: ENUM('value1', 'value2', ...)
-                String values = enumValues.stream()
-                        .map(v -> "'" + v.replace("'", "''") + "'")
-                        .collect(Collectors.joining(", "));
-                columnSQL = new StringBuilder("`" + name + "` ENUM(" + values + ")");
-            }
-        } else if (length != 0 && decimal != 0) {
-            columnSQL.append("(").append(length).append(",").append(decimal).append(")");
-        } else if (length != 0) {
-            columnSQL.append("(").append(length).append(")");
+        boolean isEnumColumn = enumValues != null && !enumValues.isEmpty();
+        if (isEnumColumn) {
+            columnSQL.append(dialect.enumColumnType(this));
+        } else {
+            columnSQL.append(dialect.columnType(this));
         }
 
-        // For autoincrement columns with primary key
-        if (isAutoIncrement && isPrimaryKey) {
-            if (databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
-                // SQLite: INTEGER PRIMARY KEY AUTOINCREMENT (inline, no NOT NULL needed)
-                columnSQL.append(" PRIMARY KEY AUTOINCREMENT");
-                if (unique) {
-                    columnSQL.append(" UNIQUE");
-                }
-                return columnSQL.toString();
-            } else {
-                // MySQL/MariaDB: column will have AUTO_INCREMENT
-                columnSQL.append(" AUTO_INCREMENT");
-            }
+        String autoIncrementKeyword = dialect.autoIncrementKeyword(this);
+        if (!autoIncrementKeyword.isEmpty()) {
+            columnSQL.append(" ").append(autoIncrementKeyword);
         }
 
         if (nullable) {
@@ -137,6 +122,10 @@ public class ColumnDefinition {
         return this;
     }
 
+    public int getDecimal() {
+        return decimal;
+    }
+
     public Boolean getNullable() {
         return nullable;
     }
@@ -153,8 +142,9 @@ public class ColumnDefinition {
         return isPrimaryKey;
     }
 
-    public void setPrimaryKey(boolean primaryKey) {
+    public ColumnDefinition setPrimaryKey(boolean primaryKey) {
         isPrimaryKey = primaryKey;
+        return this;
     }
 
     public String getReferenceTable() {

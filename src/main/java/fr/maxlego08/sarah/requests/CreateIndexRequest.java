@@ -5,6 +5,8 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -22,17 +24,18 @@ public class CreateIndexRequest implements Executor {
 
     @Override
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
 
         StringBuilder indexTableSQL = new StringBuilder("CREATE INDEX ");
         String tableName = schema.getTableName();
         ColumnDefinition column = schema.getColumns().get(0);
         String indexName = "idx_" + tableName + "_" + column.getName();
 
-        indexTableSQL.append(indexName);
+        indexTableSQL.append(dialect.quoteIdentifier(indexName));
         indexTableSQL.append(" ON ");
-        indexTableSQL.append(String.format("`%s`", tableName));
+        indexTableSQL.append(dialect.quoteTableReference(tableName));
         indexTableSQL.append(" (");
-        indexTableSQL.append(column.getSafeName());
+        indexTableSQL.append(dialect.quoteIdentifier(column.getName()));
         indexTableSQL.append(" )");
 
         String finalQuery = databaseConfiguration.replacePrefix(indexTableSQL.toString());

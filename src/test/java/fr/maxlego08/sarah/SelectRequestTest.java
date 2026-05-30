@@ -73,6 +73,20 @@ public class SelectRequestTest extends DatabaseTestBase {
     }
 
     @Test
+    public void testSelectAllWithAliasInTableName() {
+        List<Map<String, Object>> results = requestHelper.select("test_users u", schema -> {});
+
+        assertEquals(3, results.size());
+    }
+
+    @Test
+    public void testSelectAllWithSchemaQualifiedTableName() {
+        List<Map<String, Object>> results = requestHelper.select("main.test_users", schema -> {});
+
+        assertEquals(3, results.size());
+    }
+
+    @Test
     public void testSelectWithWhere() {
         List<Map<String, Object>> results = requestHelper.select("test_users", schema -> {
             schema.where("username", "alice");
@@ -140,6 +154,13 @@ public class SelectRequestTest extends DatabaseTestBase {
     @Test
     public void testSelectCount() {
         long count = requestHelper.count("test_users", schema -> {});
+
+        assertEquals(3, count);
+    }
+
+    @Test
+    public void testSelectCountWithAliasInTableName() {
+        long count = requestHelper.count("test_users u", schema -> {});
 
         assertEquals(3, count);
     }

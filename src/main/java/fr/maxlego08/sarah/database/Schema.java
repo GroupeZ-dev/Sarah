@@ -2,9 +2,12 @@ package fr.maxlego08.sarah.database;
 
 import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
+import fr.maxlego08.sarah.conditions.ForeignKeyDefinition;
 import fr.maxlego08.sarah.conditions.JoinCondition;
+import fr.maxlego08.sarah.conditions.OrderByCondition;
 import fr.maxlego08.sarah.conditions.SelectCondition;
 import fr.maxlego08.sarah.conditions.WhereCondition;
+import fr.maxlego08.sarah.dialect.SqlDialect;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.PreparedStatement;
@@ -591,6 +594,14 @@ public interface Schema {
     void whereConditions(StringBuilder stringBuilder);
 
     /**
+     * Appends WHERE conditions to the provided SQL query using the provided SQL dialect.
+     *
+     * @param stringBuilder the StringBuilder to append the WHERE conditions to
+     * @param dialect       the SQL dialect used to render identifiers
+     */
+    void whereConditions(StringBuilder stringBuilder, SqlDialect dialect);
+
+    /**
      * Applies the stored WHERE conditions to the provided PreparedStatement.
      * This method iterates over all the WHERE conditions configured in the schema,
      * and sets the corresponding values in the PreparedStatement starting from
@@ -621,7 +632,7 @@ public interface Schema {
      *
      * @return the list of foreign keys defined in this schema
      */
-    List<String> getForeignKeys();
+    List<ForeignKeyDefinition> getForeignKeys();
 
     /**
      * Retrieves the list of join conditions configured in this schema.
@@ -653,6 +664,13 @@ public interface Schema {
      * @return the ORDER BY clause for this schema
      */
     String getOrderBy();
+
+    /**
+     * Gets the ORDER BY condition configured for this schema, if any.
+     *
+     * @return the order-by condition or null when no order-by is configured
+     */
+    OrderByCondition getOrderByCondition();
 
     /**
      * Makes the query results of this schema distinct.

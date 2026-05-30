@@ -12,7 +12,7 @@ extra.set("classifier", System.getProperty("archive.classifier"))
 extra.set("sha", System.getProperty("github.sha"))
 
 group = "fr.maxlego08.sarah"
-version = "1.23"
+version = "1.24"
 
 rootProject.extra.properties["sha"]?.let { sha ->
     version = sha
@@ -37,6 +37,7 @@ dependencies {
     compileOnly("org.xerial:sqlite-jdbc:3.42.0.0")
     compileOnly("org.mariadb.jdbc:mariadb-java-client:3.1.4")
     compileOnly("com.mysql:mysql-connector-j:8.2.0")
+    compileOnly("org.postgresql:postgresql:42.7.3")
 
     // Test dependencies
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.3")
@@ -47,6 +48,7 @@ dependencies {
     testImplementation("org.xerial:sqlite-jdbc:3.42.0.0")
     testImplementation("org.mariadb.jdbc:mariadb-java-client:3.1.4")
     testImplementation("com.mysql:mysql-connector-j:8.2.0")
+    testImplementation("org.postgresql:postgresql:42.7.3")
 }
 
 tasks.withType<Jar> {

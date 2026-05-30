@@ -6,6 +6,8 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.conditions.JoinCondition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -25,12 +27,13 @@ public class UpdateRequest implements Executor {
 
     @Override
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
 
-        StringBuilder updateQuery = new StringBuilder("UPDATE " + this.schema.getTableName());
+        StringBuilder updateQuery = new StringBuilder("UPDATE " + dialect.quoteTableReference(this.schema.getTableName()));
 
         if (!this.schema.getJoinConditions().isEmpty()) {
             for (JoinCondition join : this.schema.getJoinConditions()) {
-                updateQuery.append(" ").append(join.getJoinClause());
+                updateQuery.append(" ").append(join.getJoinClause(dialect));
             }
         }
 
@@ -40,11 +43,11 @@ public class UpdateRequest implements Executor {
 
         for (int i = 0; i < this.schema.getColumns().size(); i++) {
             ColumnDefinition columnDefinition = this.schema.getColumns().get(i);
-            updateQuery.append(i > 0 ? ", " : "").append(columnDefinition.getSafeName()).append(" = ?");
+            updateQuery.append(i > 0 ? ", " : "").append(dialect.quoteIdentifier(columnDefinition.getName())).append(" = ?");
             values.add(columnDefinition.getObject());
         }
 
-        this.schema.whereConditions(updateQuery);
+        this.schema.whereConditions(updateQuery, dialect);
         String updateSql = databaseConfiguration.replacePrefix(updateQuery.toString());
 
         if (databaseConfiguration.isDebug()) {

@@ -1,7 +1,9 @@
 package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
+import fr.maxlego08.sarah.conditions.ForeignKeyDefinition;
 import fr.maxlego08.sarah.conditions.JoinCondition;
+import fr.maxlego08.sarah.conditions.OrderByCondition;
 import fr.maxlego08.sarah.conditions.SelectCondition;
 import fr.maxlego08.sarah.conditions.WhereCondition;
 import fr.maxlego08.sarah.database.DatabaseType;
@@ -9,6 +11,8 @@ import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Migration;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.database.SchemaType;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.SarahException;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.AlterRequest;
@@ -55,12 +59,12 @@ public class SchemaBuilder implements Schema {
     private final SchemaType schemaType;
     private final List<ColumnDefinition> columns = new ArrayList<>();
     private final List<String> primaryKeys = new ArrayList<>();
-    private final List<String> foreignKeys = new ArrayList<>();
+    private final List<ForeignKeyDefinition> foreignKeys = new ArrayList<>();
     private final List<WhereCondition> whereConditions = new ArrayList<>();
     private final List<JoinCondition> joinConditions = new ArrayList<>();
     private final List<SelectCondition> selectColumns = new ArrayList<>();
     private String newTableName;
-    private String orderBy;
+    private OrderByCondition orderByCondition;
     private Migration migration;
     private boolean isDistinct;
 
@@ -78,7 +82,7 @@ public class SchemaBuilder implements Schema {
         schema.whereConditions.addAll(oldSchema.getWhereConditions());
         schema.joinConditions.addAll(oldSchema.getJoinConditions());
         schema.selectColumns.addAll(oldSchema.getSelectColumns());
-        schema.orderBy = oldSchema.getOrderBy();
+        schema.orderByCondition = oldSchema.getOrderByCondition();
         schema.migration = oldSchema.getMigration();
         schema.isDistinct = oldSchema.isDistinct();
         schema.newTableName = oldSchema.getNewTableName();
@@ -372,8 +376,7 @@ public class SchemaBuilder implements Schema {
         if (this.columns.isEmpty()) throw new IllegalStateException("No column defined to apply foreign key.");
         ColumnDefinition lastColumn = this.columns.get(this.columns.size() - 1);
 
-        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE CASCADE", lastColumn.getSafeName(), safeTable(referenceTable), lastColumn.getSafeName());
-        this.foreignKeys.add(fkDefinition);
+        this.foreignKeys.add(new ForeignKeyDefinition(lastColumn.getName(), referenceTable, lastColumn.getName(), true));
         return this;
     }
 
@@ -382,17 +385,8 @@ public class SchemaBuilder implements Schema {
         if (this.columns.isEmpty()) throw new IllegalStateException("No column defined to apply foreign key.");
         ColumnDefinition lastColumn = this.columns.get(this.columns.size() - 1);
 
-        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(`%s`)%s", lastColumn.getSafeName(), safeTable(referenceTable), columnName, onCascade ? " ON DELETE CASCADE" : "");
-        this.foreignKeys.add(fkDefinition);
+        this.foreignKeys.add(new ForeignKeyDefinition(lastColumn.getName(), referenceTable, columnName, onCascade));
         return this;
-    }
-
-    /**
-     * Wraps a table name in backticks for safe SQL identifier quoting.
-     * Works with %prefix% placeholders since they are replaced after SQL generation.
-     */
-    private String safeTable(String tableName) {
-        return "`" + tableName + "`";
     }
 
     @Override
@@ -423,10 +417,11 @@ public class SchemaBuilder implements Schema {
         ColumnDefinition column = new ColumnDefinition("updated_at", "TIMESTAMP");
 
         DatabaseConfiguration configuration = MigrationManager.getDatabaseConfiguration();
-        if (configuration.getDatabaseType() == DatabaseType.SQLITE) {
+        if (configuration == null) {
             column.setDefaultValue("CURRENT_TIMESTAMP");
         } else {
-            column.setDefaultValue("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+            SqlDialect dialect = SqlDialects.from(configuration.getDatabaseType());
+            column.setDefaultValue(dialect.updatedAtDefaultValue());
         }
         this.columns.add(column);
         return this;
@@ -464,7 +459,7 @@ public class SchemaBuilder implements Schema {
     public Schema primary() {
         ColumnDefinition lastColumn = getLastColumn();
         lastColumn.setPrimaryKey(true);
-        primaryKeys.add(lastColumn.getSafeName());
+        primaryKeys.add(lastColumn.getName());
         return this;
     }
 
@@ -492,10 +487,17 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void whereConditions(StringBuilder sql) {
+        DatabaseConfiguration configuration = MigrationManager.getDatabaseConfiguration();
+        SqlDialect dialect = configuration == null ? SqlDialects.from(DatabaseType.MYSQL) : SqlDialects.from(configuration.getDatabaseType());
+        whereConditions(sql, dialect);
+    }
+
+    @Override
+    public void whereConditions(StringBuilder sql, SqlDialect dialect) {
         if (!this.whereConditions.isEmpty()) {
             List<String> conditions = new ArrayList<>();
             for (WhereCondition condition : this.whereConditions) {
-                conditions.add(condition.getCondition());
+                conditions.add(condition.getCondition(dialect));
             }
             sql.append(" WHERE ").append(String.join(" AND ", conditions));
         }
@@ -503,8 +505,9 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public long executeSelectCount(DatabaseConnection databaseConnection, Logger logger) throws SQLException {
-        StringBuilder selectQuery = new StringBuilder("SELECT COUNT(*) FROM " + tableName);
-        this.whereConditions(selectQuery);
+        SqlDialect dialect = SqlDialects.from(databaseConnection.getDatabaseConfiguration().getDatabaseType());
+        StringBuilder selectQuery = new StringBuilder("SELECT COUNT(*) FROM " + dialect.quoteTableReference(tableName));
+        this.whereConditions(selectQuery, dialect);
 
         String finalQuery = databaseConnection.getDatabaseConfiguration().replacePrefix(selectQuery.toString());
         if (databaseConnection.getDatabaseConfiguration().isDebug()) {
@@ -533,29 +536,30 @@ public class SchemaBuilder implements Schema {
         List<Map<String, Object>> results = new ArrayList<>();
 
         String selectedValues = "*";
+        SqlDialect dialect = SqlDialects.from(databaseConnection.getDatabaseConfiguration().getDatabaseType());
         if (!this.selectColumns.isEmpty()) {
             selectedValues = this.selectColumns.stream()
-                    .map(SelectCondition::getSelectColumn)
+                    .map(select -> select.getSelectColumn(dialect))
                     .collect(Collectors.joining(","));
         }
 
         StringBuilder selectQuery;
         if (this.isDistinct) {
-            selectQuery = new StringBuilder("SELECT DISTINCT " + selectedValues + " FROM " + this.tableName);
+            selectQuery = new StringBuilder("SELECT DISTINCT " + selectedValues + " FROM " + dialect.quoteTableReference(this.tableName));
         } else {
-            selectQuery = new StringBuilder("SELECT " + selectedValues + " FROM " + this.tableName);
+            selectQuery = new StringBuilder("SELECT " + selectedValues + " FROM " + dialect.quoteTableReference(this.tableName));
         }
 
         if (!this.joinConditions.isEmpty()) {
             for (JoinCondition join : this.joinConditions) {
-                selectQuery.append(" ").append(join.getJoinClause());
+                selectQuery.append(" ").append(join.getJoinClause(dialect));
             }
         }
 
-        this.whereConditions(selectQuery);
+        this.whereConditions(selectQuery, dialect);
 
-        if (this.orderBy != null) {
-            selectQuery.append(" ").append(this.orderBy);
+        if (this.orderByCondition != null) {
+            selectQuery.append(" ").append(this.orderByCondition.getOrderByClause(dialect));
         }
 
         DatabaseConfiguration databaseConfiguration = databaseConnection.getDatabaseConfiguration();
@@ -764,7 +768,7 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
-    public List<String> getForeignKeys() {
+    public List<ForeignKeyDefinition> getForeignKeys() {
         return foreignKeys;
     }
 
@@ -775,17 +779,24 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void orderBy(String columnName) {
-        this.orderBy = String.format("ORDER BY %s", columnName);
+        String[] parts = splitQualifiedName(columnName);
+        this.orderByCondition = new OrderByCondition(parts[0], parts[1], false);
     }
 
     @Override
     public void orderByDesc(String columnName) {
-        this.orderBy = String.format("ORDER BY %s DESC", columnName);
+        String[] parts = splitQualifiedName(columnName);
+        this.orderByCondition = new OrderByCondition(parts[0], parts[1], true);
     }
 
     @Override
     public String getOrderBy() {
-        return this.orderBy;
+        return this.orderByCondition == null ? null : this.orderByCondition.getOrderByClause();
+    }
+
+    @Override
+    public OrderByCondition getOrderByCondition() {
+        return this.orderByCondition;
     }
 
     @Override
@@ -854,12 +865,12 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void addSelect(String prefix, String selectedColumn, String aliases) {
-        this.selectColumns.add(new SelectCondition(null, selectedColumn, aliases, false, null));
+        this.selectColumns.add(new SelectCondition(prefix, selectedColumn, aliases, false, null));
     }
 
     @Override
     public void addSelect(String prefix, String selectedColumn, String aliases, Object defaultValue) {
-        this.selectColumns.add(new SelectCondition(null, selectedColumn, aliases, true, defaultValue));
+        this.selectColumns.add(new SelectCondition(prefix, selectedColumn, aliases, true, defaultValue));
     }
 
     @Override
@@ -880,5 +891,20 @@ public class SchemaBuilder implements Schema {
     @Override
     public String getNewTableName() {
         return newTableName;
+    }
+
+    private String[] splitQualifiedName(String columnName) {
+        if (columnName == null) {
+            return new String[]{null, null};
+        }
+
+        int separatorIndex = columnName.indexOf('.');
+        if (separatorIndex < 0) {
+            return new String[]{null, columnName};
+        }
+
+        String prefix = columnName.substring(0, separatorIndex);
+        String column = columnName.substring(separatorIndex + 1);
+        return new String[]{prefix, column};
     }
 }

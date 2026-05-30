@@ -54,6 +54,17 @@ public void connect() {
 }
 ````
 
+### With PostgreSQL
+
+````java
+public void connect() {
+    DatabaseConfiguration configuration=DatabaseConfiguration.createPostgreSql(<user>,<password>,<port>,<host>,<database>);
+    DatabaseConnection connection=new PostgreSqlConnection(configuration,<logger>);
+}
+````
+
+PostgreSQL uses the `org.postgresql:postgresql` JDBC driver. Consumers must provide this driver at runtime.
+
 ### With SQLITE
 
 ````java

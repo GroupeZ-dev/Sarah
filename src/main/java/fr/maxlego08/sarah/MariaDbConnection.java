@@ -1,5 +1,6 @@
 package fr.maxlego08.sarah;
 
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -21,6 +22,7 @@ public class MariaDbConnection extends DatabaseConnection {
         properties.setProperty("useSSL", "false");
         properties.setProperty("user", databaseConfiguration.getUser());
         properties.setProperty("password", databaseConfiguration.getPassword());
-        return DriverManager.getConnection("jdbc:mariadb://" + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase() + "?allowMultiQueries=true", properties);
+        String url = SqlDialects.from(databaseConfiguration.getDatabaseType()).jdbcUrl(databaseConfiguration);
+        return DriverManager.getConnection(url, properties);
     }
 }

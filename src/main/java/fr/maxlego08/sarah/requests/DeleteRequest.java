@@ -4,6 +4,8 @@ import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -21,8 +23,9 @@ public class DeleteRequest implements Executor {
 
     @Override
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
-        StringBuilder sql = new StringBuilder("DELETE FROM ").append(schemaBuilder.getTableName());
-        schemaBuilder.whereConditions(sql);
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
+        StringBuilder sql = new StringBuilder("DELETE FROM ").append(dialect.quoteTableReference(schemaBuilder.getTableName()));
+        schemaBuilder.whereConditions(sql, dialect);
 
         String finalQuery = databaseConfiguration.replacePrefix(sql.toString());
         if (databaseConfiguration.isDebug()) {

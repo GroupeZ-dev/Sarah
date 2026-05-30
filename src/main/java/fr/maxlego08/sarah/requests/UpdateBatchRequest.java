@@ -6,6 +6,8 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.conditions.JoinCondition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -26,12 +28,13 @@ public class UpdateBatchRequest implements Executor {
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
         if (schemas.isEmpty()) return 0;
 
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
         Schema firstSchema = schemas.get(0);
-        StringBuilder updateQuery = new StringBuilder("UPDATE " + firstSchema.getTableName());
+        StringBuilder updateQuery = new StringBuilder("UPDATE " + dialect.quoteTableReference(firstSchema.getTableName()));
 
         if (!firstSchema.getJoinConditions().isEmpty()) {
             for (JoinCondition join : firstSchema.getJoinConditions()) {
-                updateQuery.append(" ").append(join.getJoinClause());
+                updateQuery.append(" ").append(join.getJoinClause(dialect));
             }
         }
 
@@ -40,10 +43,10 @@ public class UpdateBatchRequest implements Executor {
         List<ColumnDefinition> columns = firstSchema.getColumns();
         for (int i = 0; i < columns.size(); i++) {
             ColumnDefinition columnDefinition = columns.get(i);
-            updateQuery.append(i > 0 ? ", " : "").append(columnDefinition.getSafeName()).append(" = ?");
+            updateQuery.append(i > 0 ? ", " : "").append(dialect.quoteIdentifier(columnDefinition.getName())).append(" = ?");
         }
 
-        firstSchema.whereConditions(updateQuery);
+        firstSchema.whereConditions(updateQuery, dialect);
         String updateSql = databaseConfiguration.replacePrefix(updateQuery.toString());
 
         if (databaseConfiguration.isDebug()) {

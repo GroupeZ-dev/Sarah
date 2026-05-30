@@ -3,9 +3,10 @@ package fr.maxlego08.sarah.requests;
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
-import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -29,20 +30,19 @@ public class UpsertBatchRequest implements Executor {
             return 0;
         }
 
-        DatabaseType databaseType = databaseConfiguration.getDatabaseType();
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
         Schema firstSchema = schemas.get(0);
-        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + firstSchema.getTableName() + " (");
+        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + dialect.quoteTableReference(firstSchema.getTableName()) + " (");
         StringBuilder valuesQuery = new StringBuilder("VALUES ");
-        StringBuilder onUpdateQuery = new StringBuilder();
 
         List<Object> values = new ArrayList<>();
         List<String> placeholders = new ArrayList<>();
-        List<String> insertColumnNames = new ArrayList<>();
+        List<String> insertColumnNames = new ArrayList<String>();
 
         // Build column list - skip auto-increment columns
         for (ColumnDefinition column : firstSchema.getColumns()) {
             if (!column.isAutoIncrement()) {
-                insertColumnNames.add(column.getSafeName());
+                insertColumnNames.add(dialect.quoteIdentifier(column.getName()));
             }
         }
 
@@ -62,28 +62,17 @@ public class UpsertBatchRequest implements Executor {
 
         valuesQuery.append(String.join(", ", placeholders));
 
-        if (databaseType == DatabaseType.SQLITE) {
-            StringBuilder onConflictQuery = new StringBuilder(" ON CONFLICT (");
-            List<String> primaryKeys = firstSchema.getPrimaryKeys();
-            onConflictQuery.append(String.join(", ", primaryKeys)).append(") DO UPDATE SET ");
-
-            // Skip auto-increment columns in UPDATE as well
-            for (int i = 0; i < insertColumnNames.size(); i++) {
-                if (i > 0) onUpdateQuery.append(", ");
-                onUpdateQuery.append(insertColumnNames.get(i)).append(" = excluded.").append(insertColumnNames.get(i));
+        StringBuilder onUpdateQuery = new StringBuilder();
+        for (int i = 0; i < insertColumnNames.size(); i++) {
+            if (i > 0) {
+                onUpdateQuery.append(", ");
             }
-
-            insertQuery.append(valuesQuery).append(onConflictQuery).append(onUpdateQuery);
-        } else {
-            onUpdateQuery.append(" ON DUPLICATE KEY UPDATE ");
-            // Skip auto-increment columns in UPDATE as well
-            for (int i = 0; i < insertColumnNames.size(); i++) {
-                if (i > 0) onUpdateQuery.append(", ");
-                onUpdateQuery.append(insertColumnNames.get(i)).append(" = VALUES(").append(insertColumnNames.get(i)).append(")");
-            }
-
-            insertQuery.append(valuesQuery).append(onUpdateQuery);
+            onUpdateQuery.append(dialect.upsertUpdateExpression(insertColumnNames.get(i), true));
         }
+
+        insertQuery.append(valuesQuery)
+                .append(dialect.upsertConflictClause(firstSchema))
+                .append(onUpdateQuery);
 
         String finalQuery = databaseConfiguration.replacePrefix(insertQuery.toString());
         if (databaseConfiguration.isDebug()) {

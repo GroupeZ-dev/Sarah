@@ -1,5 +1,9 @@
 package fr.maxlego08.sarah.conditions;
 
+import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
+
 import java.util.Objects;
 
 public class SelectCondition {
@@ -51,8 +55,16 @@ public class SelectCondition {
         return result;
     }
 
+    public String getSelectColumn(SqlDialect dialect) {
+        String quotedColumn = dialect.qualifyIdentifier(this.tablePrefix, this.column);
+        if (isCoalesce) {
+            return "COALESCE(" + quotedColumn + ", " + defaultValue + ")" + getAliases();
+        }
+        return quotedColumn + getAliases();
+    }
+
     private String getColumnAndAliases() {
-        return "`" + this.column + "`" + getAliases();
+        return SqlDialects.from(DatabaseType.MYSQL).quoteIdentifier(this.column) + getAliases();
     }
 
     private String getAliases() {

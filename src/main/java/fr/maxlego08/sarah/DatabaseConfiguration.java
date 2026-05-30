@@ -61,6 +61,14 @@ public class DatabaseConfiguration {
         return new DatabaseConfiguration("", user, password, port, host, database, debug, DatabaseType.MARIADB);
     }
 
+    public static DatabaseConfiguration createPostgreSql(String user, String password, int port, String host, String database) {
+        return new DatabaseConfiguration("", user, password, port, host, database, false, DatabaseType.POSTGRESQL);
+    }
+
+    public static DatabaseConfiguration createPostgreSql(String user, String password, int port, String host, String database, boolean debug) {
+        return new DatabaseConfiguration("", user, password, port, host, database, debug, DatabaseType.POSTGRESQL);
+    }
+
     public static DatabaseConfiguration create(String user, String password, String host, String database, DatabaseType databaseType) {
         return new DatabaseConfiguration("", user, password, 3306, host, database, false, databaseType);
     }
@@ -71,6 +79,10 @@ public class DatabaseConfiguration {
 
     public static DatabaseConfiguration createMariaDb(String user, String password, String host, String database) {
         return new DatabaseConfiguration("", user, password, 3306, host, database, false, DatabaseType.MARIADB);
+    }
+
+    public static DatabaseConfiguration createPostgreSql(String user, String password, String host, String database) {
+        return new DatabaseConfiguration("", user, password, 5432, host, database, false, DatabaseType.POSTGRESQL);
     }
 
     public static DatabaseConfiguration sqlite(boolean debug) {

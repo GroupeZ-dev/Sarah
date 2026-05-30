@@ -4,6 +4,8 @@ import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
@@ -26,7 +28,8 @@ public class DropTableRequest implements Executor {
             return -1;
         }
 
-        String finalQuery = databaseConfiguration.replacePrefix("DROP TABLE IF EXISTS " + tableName);
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
+        String finalQuery = databaseConfiguration.replacePrefix("DROP TABLE IF EXISTS " + dialect.quoteTableReference(tableName));
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }

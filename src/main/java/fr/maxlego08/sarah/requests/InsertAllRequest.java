@@ -5,12 +5,16 @@ import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.dialect.SqlDialect;
+import fr.maxlego08.sarah.dialect.SqlDialects;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class InsertAllRequest implements Executor {
 
@@ -24,29 +28,24 @@ public class InsertAllRequest implements Executor {
 
     @Override
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
+        SqlDialect dialect = SqlDialects.from(databaseConfiguration.getDatabaseType());
 
-        StringBuilder insertBuilder = new StringBuilder("INSERT INTO " + this.toTableName + " (");
-        StringBuilder columns = new StringBuilder();
+        StringBuilder insertBuilder = new StringBuilder("INSERT INTO ")
+                .append(dialect.quoteTableReference(this.toTableName))
+                .append(" (");
+        List<String> quotedColumns = new ArrayList<String>();
 
-        int columnIndex = 0;
         for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
-            // Skip auto-increment columns
             if (columnDefinition.isAutoIncrement()) {
                 continue;
             }
-
-            if (columnIndex > 0) {
-                columns.append(",");
-            }
-            columns.append(columnDefinition.getSafeName());
-            columnIndex++;
+            quotedColumns.add(dialect.quoteIdentifier(columnDefinition.getName()));
         }
 
-        insertBuilder.append(columns).append(") ");
-
-        insertBuilder.append("SELECT ").append(columns);
-        insertBuilder.append(" FROM ");
-        insertBuilder.append(this.schema.getTableName());
+        String columnsSql = String.join(", ", quotedColumns);
+        insertBuilder.append(columnsSql).append(") ");
+        insertBuilder.append("SELECT ").append(columnsSql);
+        insertBuilder.append(" FROM ").append(dialect.quoteTableReference(this.schema.getTableName()));
 
         String insertQuery = databaseConfiguration.replacePrefix(insertBuilder.toString());
 
