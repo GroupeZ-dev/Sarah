@@ -99,8 +99,11 @@ public class UpsertRequest implements Executor {
                     preparedStatement.setObject(index++, value);
                 }
             }
-            preparedStatement.executeUpdate();
-            return preparedStatement.getUpdateCount();
+            // getUpdateCount() n'est PAS fiable apres executeUpdate() : le pilote SQLite
+            // (org.xerial:sqlite-jdbc) rend 0 alors que executeUpdate() a bien rendu le nombre
+            // de lignes modifiees. Toute ecriture compare-and-set batie sur ce compte rendu
+            // croyait donc avoir perdu la course a chaque fois, sur toutes les bases SQLite.
+            return preparedStatement.executeUpdate();
         } catch (SQLException exception) {
             logger.info("Upsert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("upsert", this.schema.getTableName(), exception);
