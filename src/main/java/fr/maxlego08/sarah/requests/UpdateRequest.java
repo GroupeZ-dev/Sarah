@@ -57,8 +57,11 @@ public class UpdateRequest implements Executor {
                 preparedStatement.setObject(i + 1, values.get(i));
             }
             this.schema.applyWhereConditions(preparedStatement, values.size() + 1);
-            preparedStatement.executeUpdate();
-            return preparedStatement.getUpdateCount();
+            // getUpdateCount() n'est PAS fiable apres executeUpdate() : le pilote SQLite
+            // (org.xerial:sqlite-jdbc) rend 0 alors que executeUpdate() a bien rendu le nombre
+            // de lignes modifiees. Toute ecriture compare-and-set batie sur ce compte rendu
+            // croyait donc avoir perdu la course a chaque fois, sur toutes les bases SQLite.
+            return preparedStatement.executeUpdate();
         } catch (SQLException exception) {
             logger.info("Update operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("update", this.schema.getTableName(), exception);
