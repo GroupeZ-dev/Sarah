@@ -24,6 +24,7 @@ jobs:
       publish: true
       publish-on-discord: false
       project-to-publish: "publish"
+      java-version: "21"
     secrets:
       MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
       MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
