@@ -20,6 +20,11 @@ public class DatabaseConfiguration {
     private final DatabaseType databaseType;
     private final Integer maximumPoolSize;
     private final Integer minimumIdle;
+    /**
+     * Hikari max connection lifetime in milliseconds. {@code null} keeps the library default.
+     * {@code 0} disables retirement. Hikari rejects values below 30 seconds.
+     */
+    private final Long maxLifetime;
 
     public DatabaseConfiguration(String tablePrefix, String user, String password, int port, String host,
                                  String database, boolean debug, DatabaseType databaseType) {
@@ -29,6 +34,12 @@ public class DatabaseConfiguration {
     public DatabaseConfiguration(String tablePrefix, String user, String password, int port, String host,
                                  String database, boolean debug, DatabaseType databaseType,
                                  Integer maximumPoolSize, Integer minimumIdle) {
+        this(tablePrefix, user, password, port, host, database, debug, databaseType, maximumPoolSize, minimumIdle, null);
+    }
+
+    public DatabaseConfiguration(String tablePrefix, String user, String password, int port, String host,
+                                 String database, boolean debug, DatabaseType databaseType,
+                                 Integer maximumPoolSize, Integer minimumIdle, Long maxLifetime) {
         this.tablePrefix = tablePrefix;
         this.user = user;
         this.password = password;
@@ -39,6 +50,7 @@ public class DatabaseConfiguration {
         this.databaseType = databaseType;
         this.maximumPoolSize = maximumPoolSize;
         this.minimumIdle = minimumIdle;
+        this.maxLifetime = maxLifetime;
     }
 
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database, DatabaseType databaseType) {
@@ -121,9 +133,21 @@ public class DatabaseConfiguration {
         return minimumIdle;
     }
 
+    public Long getMaxLifetime() {
+        return maxLifetime;
+    }
+
     public DatabaseConfiguration withPoolSettings(Integer maximumPoolSize, Integer minimumIdle) {
         return new DatabaseConfiguration(this.tablePrefix, this.user, this.password, this.port, this.host,
-                this.database, this.debug, this.databaseType, maximumPoolSize, minimumIdle);
+                this.database, this.debug, this.databaseType, maximumPoolSize, minimumIdle, this.maxLifetime);
+    }
+
+    /**
+     * @param maxLifetime connection lifetime in milliseconds, {@code 0} to keep connections until the pool closes, or {@code null} for the default
+     */
+    public DatabaseConfiguration withMaxLifetime(Long maxLifetime) {
+        return new DatabaseConfiguration(this.tablePrefix, this.user, this.password, this.port, this.host,
+                this.database, this.debug, this.databaseType, this.maximumPoolSize, this.minimumIdle, maxLifetime);
     }
 
     @Override
@@ -140,12 +164,13 @@ public class DatabaseConfiguration {
                 Objects.equals(database, that.database) &&
                 databaseType == that.databaseType &&
                 Objects.equals(maximumPoolSize, that.maximumPoolSize) &&
-                Objects.equals(minimumIdle, that.minimumIdle);
+                Objects.equals(minimumIdle, that.minimumIdle) &&
+                Objects.equals(maxLifetime, that.maxLifetime);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(tablePrefix, user, password, port, host, database, debug, databaseType, maximumPoolSize, minimumIdle);
+        return Objects.hash(tablePrefix, user, password, port, host, database, debug, databaseType, maximumPoolSize, minimumIdle, maxLifetime);
     }
 
     @Override
@@ -161,6 +186,7 @@ public class DatabaseConfiguration {
                 ", databaseType=" + databaseType +
                 ", maximumPoolSize=" + maximumPoolSize +
                 ", minimumIdle=" + minimumIdle +
+                ", maxLifetime=" + maxLifetime +
                 '}';
     }
 }
