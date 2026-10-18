@@ -69,7 +69,13 @@ public class HikariDatabaseConnection extends DatabaseConnection {
 
         config.setMaximumPoolSize(configuredMaxPoolSize);
         config.setMinimumIdle(configuredMinimumIdle);
-        config.setMaxLifetime(MAX_LIFETIME);
+
+        long configuredMaxLifetime = MAX_LIFETIME;
+        Long maxLifetime = databaseConfiguration.getMaxLifetime();
+        if (maxLifetime != null && maxLifetime >= 0) {
+            configuredMaxLifetime = maxLifetime;
+        }
+        config.setMaxLifetime(configuredMaxLifetime);
         config.setConnectionTimeout(CONNECTION_TIMEOUT);
         config.setLeakDetectionThreshold(LEAK_DETECTION_THRESHOLD);
 
