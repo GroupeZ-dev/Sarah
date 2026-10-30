@@ -60,7 +60,7 @@ public class RequestHelper {
         try {
             return SchemaBuilder.upsert(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
-            this.logger.info("Upsert operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("Upsert operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("upsert", tableName, exception);
         }
     }
@@ -78,7 +78,7 @@ public class RequestHelper {
         try {
             return SchemaBuilder.update(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
-            this.logger.info("Update operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("Update operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("update", tableName, exception);
         }
     }
@@ -110,7 +110,7 @@ public class RequestHelper {
         try {
             return SchemaBuilder.insert(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
-            this.logger.info("Insert operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("Insert operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("insert", tableName, exception);
         }
     }
@@ -144,7 +144,7 @@ public class RequestHelper {
         try {
             consumerResult.accept(SchemaBuilder.insert(tableName, consumer).execute(this.connection, this.logger));
         } catch (SQLException exception) {
-            this.logger.info("Insert operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("Insert operation failed on table: " + tableName + " - " + exception.getMessage());
             exceptionRunnable.run();
             throw new DatabaseException("insert", tableName, exception);
         }
@@ -167,7 +167,7 @@ public class RequestHelper {
         try {
             return schema.executeSelectCount(this.connection, this.logger);
         } catch (SQLException exception) {
-            this.logger.info("Count operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("Count operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("count", tableName, exception);
         }
     }
@@ -190,7 +190,7 @@ public class RequestHelper {
         try {
             return schema.executeSelect(clazz, this.connection, this.logger);
         } catch (Exception exception) {
-            this.logger.info("Select operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("Select operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("select", tableName, exception);
         }
     }
@@ -212,7 +212,7 @@ public class RequestHelper {
         try {
             return schema.executeSelect(this.connection, this.logger);
         } catch (Exception exception) {
-            this.logger.info("Select operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("Select operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("select", tableName, exception);
         }
     }
@@ -231,7 +231,7 @@ public class RequestHelper {
         try {
             return schema.executeSelect(clazz, this.connection, this.logger);
         } catch (Exception exception) {
-            this.logger.info("SelectAll operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("SelectAll operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("selectAll", tableName, exception);
         }
     }
@@ -250,7 +250,7 @@ public class RequestHelper {
         try {
             return schema.execute(this.connection, this.logger);
         } catch (SQLException exception) {
-            this.logger.info("Delete operation failed on table: " + tableName + " - " + exception.getMessage());
+            this.logger.error("Delete operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("delete", tableName, exception);
         }
     }
@@ -346,7 +346,7 @@ public class RequestHelper {
                 try {
                     total += schema.execute(this.connection, this.logger);
                 } catch (SQLException exception) {
-                    this.logger.info("UpdateMultiple operation failed for schema: " + schema.getTableName() + " - " + exception.getMessage());
+                    this.logger.error("UpdateMultiple operation failed for schema: " + schema.getTableName() + " - " + exception.getMessage());
                     throw new DatabaseException("updateMultiple", schema.getTableName(), exception);
                 }
             }
@@ -400,7 +400,7 @@ public class RequestHelper {
             bind(preparedStatement, parameters);
             return preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            this.logger.info("Raw statement failed: " + finalQuery + " - " + exception.getMessage());
+            this.logger.error("Raw statement failed: " + finalQuery + " - " + exception.getMessage());
             throw new DatabaseException("execute", exception);
         }
     }
@@ -431,7 +431,7 @@ public class RequestHelper {
             }
             return results;
         } catch (SQLException exception) {
-            this.logger.info("Raw query failed: " + finalQuery + " - " + exception.getMessage());
+            this.logger.error("Raw query failed: " + finalQuery + " - " + exception.getMessage());
             throw new DatabaseException("query", exception);
         }
     }

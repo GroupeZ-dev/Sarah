@@ -1,5 +1,7 @@
 package fr.maxlego08.sarah.conditions;
 
+import fr.maxlego08.sarah.security.SqlIdentifiers;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -14,14 +16,14 @@ public class WhereCondition {
     private final List<Object> values = new ArrayList<>();
 
     public WhereCondition(String prefix, String column, String operator, Object value) {
-        this.column = (prefix == null ? "" : prefix + ".") + "`" + column + "`";
-        this.operator = operator;
+        this.column = qualify(prefix, column);
+        this.operator = SqlIdentifiers.operator(operator);
         this.value = value;
         this.whereAction = WhereAction.NORMAL;
     }
 
     public WhereCondition(String prefix, String column, List<?> values) {
-        this.column = (prefix == null ? "" : prefix + ".") + "`" + column + "`";
+        this.column = qualify(prefix, column);
         this.value = null;
         this.operator = null;
         this.values.addAll(values);
@@ -29,10 +31,15 @@ public class WhereCondition {
     }
 
     public WhereCondition(String column, WhereAction whereAction) {
-        this.column = column;
+        // Written as is, as it always was, so a qualified name such as t.col keeps working
+        this.column = SqlIdentifiers.reference(column);
         this.value = null;
         this.operator = null;
         this.whereAction = whereAction;
+    }
+
+    private static String qualify(String prefix, String column) {
+        return (prefix == null ? "" : SqlIdentifiers.reference(prefix) + ".") + SqlIdentifiers.quote(column);
     }
 
     public String getCondition() {
@@ -62,7 +69,17 @@ public class WhereCondition {
         return whereAction;
     }
 
-    public List<Object> getValues() {
+    /**
+     * @return the values of an {@code IN} condition, as strings
+     */
+    public List<String> getValues() {
+        return values.stream().map(String::valueOf).collect(Collectors.toList());
+    }
+
+    /**
+     * @return the values of an {@code IN} condition, with their own type, as they are bound
+     */
+    public List<Object> getParameters() {
         return values;
     }
 

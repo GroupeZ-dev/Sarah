@@ -88,10 +88,10 @@ public class UpdateBatchRequest implements Executor {
                 try {
                     connection.rollback();
                 } catch (SQLException rollbackException) {
-                    logger.info("Rollback failed: " + rollbackException.getMessage());
+                    logger.error("Rollback failed: " + rollbackException.getMessage());
                 }
             }
-            logger.info("Update batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
+            logger.error("Update batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("updateBatch", firstSchema.getTableName(), exception);
         } finally {
             if (preparedStatement != null) {

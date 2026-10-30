@@ -10,6 +10,7 @@ import fr.maxlego08.sarah.logger.Logger;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -71,10 +72,16 @@ public class HikariDatabaseConnection extends DatabaseConnection {
             configuredMaxLifetime = maxLifetime;
         }
         config.setMaxLifetime(configuredMaxLifetime);
-        config.setConnectionTimeout(CONNECTION_TIMEOUT);
-        config.setLeakDetectionThreshold(LEAK_DETECTION_THRESHOLD);
 
-        for (Map.Entry<String, String> e : dialect.dataSourceProperties().entrySet()) {
+        Long connectionTimeout = databaseConfiguration.getConnectionTimeout();
+        config.setConnectionTimeout(connectionTimeout != null && connectionTimeout >= 0 ? connectionTimeout : CONNECTION_TIMEOUT);
+        Long leakDetectionThreshold = databaseConfiguration.getLeakDetectionThreshold();
+        config.setLeakDetectionThreshold(leakDetectionThreshold != null && leakDetectionThreshold >= 0 ? leakDetectionThreshold : LEAK_DETECTION_THRESHOLD);
+
+        // The configuration's properties come last so they can replace Sarah's defaults, such as useSSL
+        Map<String, String> properties = new LinkedHashMap<>(dialect.dataSourceProperties());
+        properties.putAll(databaseConfiguration.getProperties());
+        for (Map.Entry<String, String> e : properties.entrySet()) {
             config.addDataSourceProperty(e.getKey(), e.getValue());
         }
 
@@ -108,7 +115,7 @@ public class HikariDatabaseConnection extends DatabaseConnection {
         try {
             return dataSource.getConnection();
         } catch (SQLException exception) {
-            this.logger.info("Failed to get connection from Hikari pool: " + exception.getMessage());
+            this.logger.error("Failed to get connection from Hikari pool: " + exception.getMessage());
             throw new DatabaseException("getConnection", exception);
         }
     }

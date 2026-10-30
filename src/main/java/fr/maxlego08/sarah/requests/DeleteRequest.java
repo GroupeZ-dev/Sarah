@@ -35,7 +35,7 @@ public class DeleteRequest implements Executor {
             int result = preparedStatement.executeUpdate();
             return result;
         } catch (SQLException exception) {
-            logger.info("Delete operation failed on table: " + schemaBuilder.getTableName() + " - " + exception.getMessage());
+            logger.error("Delete operation failed on table: " + schemaBuilder.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("delete", schemaBuilder.getTableName(), exception);
         }
     }

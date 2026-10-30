@@ -138,7 +138,7 @@ public class UpsertRequest implements Executor {
             // croyait donc avoir perdu la course a chaque fois, sur toutes les bases SQLite.
             return preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            logger.info("Upsert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            logger.error("Upsert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("upsert", this.schema.getTableName(), exception);
         }
     }

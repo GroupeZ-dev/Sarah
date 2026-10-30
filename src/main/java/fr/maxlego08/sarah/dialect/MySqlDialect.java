@@ -48,7 +48,7 @@ public class MySqlDialect extends AbstractDialect {
 
     @Override
     public String jdbcUrl(DatabaseConfiguration configuration) {
-        return "jdbc:mysql://" + configuration.getHost() + ":" + configuration.getPort() + "/" + configuration.getDatabase() + "?allowMultiQueries=true";
+        return "jdbc:mysql://" + configuration.getHost() + ":" + configuration.getPort() + "/" + configuration.getDatabase();
     }
 
     @Override
@@ -74,8 +74,22 @@ public class MySqlDialect extends AbstractDialect {
         return properties;
     }
 
+    /**
+     * The properties unpooled connections always used. {@code allowMultiQueries} used to be part of
+     * the URL; as a property it can be turned off with
+     * {@code DatabaseConfiguration#withProperty("allowMultiQueries", "false")}.
+     */
+    @Override
+    public Map<String, String> connectionProperties() {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("useSSL", "false");
+        properties.put("allowMultiQueries", "true");
+        return properties;
+    }
+
     protected Map<String, String> commonProperties() {
         Map<String, String> properties = new HashMap<>();
+        properties.put("allowMultiQueries", "true");
         properties.put("useSSL", "false");
         properties.put("useUnicode", "true");
         properties.put("characterEncoding", "utf8");

@@ -37,7 +37,7 @@ public class RenameExecutor implements Executor {
             preparedStatement.execute();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            logger.info("Rename table operation failed: " + this.schema.getTableName() + " to " + this.schema.getNewTableName() + " - " + exception.getMessage());
+            logger.error("Rename table operation failed: " + this.schema.getTableName() + " to " + this.schema.getNewTableName() + " - " + exception.getMessage());
             throw new DatabaseException("rename", this.schema.getTableName(), exception);
         }
     }

@@ -145,7 +145,7 @@ public class MigrationManager {
                 }
                 mustBeAdd.addAll(columnDefinitions);
             } catch (SQLException exception) {
-                logger.info("Failed to get table info for migration: " + exception.getMessage());
+                logger.error("Failed to get table info for migration: " + exception.getMessage());
                 throw new DatabaseException("migration-table-info", tableName, exception);
             }
         } else {
@@ -215,7 +215,7 @@ public class MigrationManager {
         try {
             schema.execute(databaseConnection, logger);
         } catch (SQLException exception) {
-            logger.info("Failed to create migration table: " + exception.getMessage());
+            logger.error("Failed to create migration table: " + exception.getMessage());
             throw new DatabaseException("create-migration-table", migrationTableName, exception);
         }
     }
@@ -234,7 +234,7 @@ public class MigrationManager {
         try {
             return schema.executeSelect(MigrationTable.class, databaseConnection, logger).stream().map(MigrationTable::getMigration).collect(Collectors.toList());
         } catch (Exception exception) {
-            logger.info("Failed to get migrations list: " + exception.getMessage());
+            logger.error("Failed to get migrations list: " + exception.getMessage());
             throw new DatabaseException("get-migrations", migrationTableName, exception);
         }
     }
@@ -252,7 +252,7 @@ public class MigrationManager {
         try {
             SchemaBuilder.insert(migrationTableName, schema -> schema.string("migration", migration.getClass().getSimpleName())).execute(databaseConnection, logger);
         } catch (SQLException exception) {
-            logger.info("Failed to insert migration record: " + exception.getMessage());
+            logger.error("Failed to insert migration record: " + exception.getMessage());
             throw new DatabaseException("insert-migration", migrationTableName, exception);
         }
     }

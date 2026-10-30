@@ -82,7 +82,7 @@ public class UpsertBatchRequest implements Executor {
 
             return preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            logger.info("Upsert batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
+            logger.error("Upsert batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("upsertBatch", firstSchema.getTableName(), exception);
         }
     }

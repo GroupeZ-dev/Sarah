@@ -28,7 +28,7 @@ public class RegressionTest extends DatabaseTestBase {
 
         // PostgreSQL rejects an integer column compared to text parameters
         List<Map<String, Object>> varargs = requestHelper.select("test_users", s -> s.whereIn("age", 25, 35));
-        List<Map<String, Object>> list = requestHelper.select("test_users", s -> s.whereIn("age", Arrays.asList(30, 35)));
+        List<Map<String, Object>> list = requestHelper.select("test_users", s -> s.whereIn("age", Arrays.asList("30", "35")));
 
         assertEquals(2, varargs.size());
         assertEquals(2, list.size());

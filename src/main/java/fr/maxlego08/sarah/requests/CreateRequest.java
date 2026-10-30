@@ -62,7 +62,7 @@ public class CreateRequest implements Executor {
             preparedStatement.execute();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            logger.info("Create table operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            logger.error("Create table operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("create", this.schema.getTableName(), exception);
         }
     }

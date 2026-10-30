@@ -28,7 +28,7 @@ public class ModifyRequest implements Executor {
         try {
             tmpSchema.execute(databaseConnection, logger);
         } catch (SQLException exception) {
-            logger.info("Modify table operation failed on table: " + schema.getTableName() + " - Failed to create temporary table - " + exception.getMessage());
+            logger.error("Modify table operation failed on table: " + schema.getTableName() + " - Failed to create temporary table - " + exception.getMessage());
             throw new DatabaseException("modify", schema.getTableName(), exception);
         }
 

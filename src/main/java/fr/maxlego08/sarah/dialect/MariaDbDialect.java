@@ -14,7 +14,7 @@ public class MariaDbDialect extends MySqlDialect {
 
     @Override
     public String jdbcUrl(DatabaseConfiguration configuration) {
-        return "jdbc:mariadb://" + configuration.getHost() + ":" + configuration.getPort() + "/" + configuration.getDatabase() + "?allowMultiQueries=true";
+        return "jdbc:mariadb://" + configuration.getHost() + ":" + configuration.getPort() + "/" + configuration.getDatabase();
     }
 
     @Override

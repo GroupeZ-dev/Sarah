@@ -1,5 +1,7 @@
 package fr.maxlego08.sarah.conditions;
 
+import fr.maxlego08.sarah.security.SqlIdentifiers;
+
 public class JoinCondition {
     private final String primaryTable;
     private final String primaryTableAlias;
@@ -33,9 +35,9 @@ public class JoinCondition {
     public String getJoinClause() {
         StringBuilder joinClause = new StringBuilder();
         joinClause.append(this.joinType.getSql()).append(" ")
-                .append(this.primaryTable).append(" AS ").append(this.primaryTableAlias)
-                .append(" ON ").append(this.primaryTableAlias).append(".").append(this.primaryColumn)
-                .append(" = ").append(this.foreignTable).append(".").append(this.foreignColumn);
+                .append(SqlIdentifiers.reference(this.primaryTable)).append(" AS ").append(SqlIdentifiers.reference(this.primaryTableAlias))
+                .append(" ON ").append(this.primaryTableAlias).append(".").append(SqlIdentifiers.reference(this.primaryColumn))
+                .append(" = ").append(SqlIdentifiers.reference(this.foreignTable)).append(".").append(SqlIdentifiers.reference(this.foreignColumn));
 
         if (this.additionalCondition != null) {
             joinClause.append(" AND ").append(this.additionalCondition.getCondition());
@@ -44,7 +46,8 @@ public class JoinCondition {
     }
 
     private String getCondition() {
-        return this.primaryTableAlias + "." + this.primaryColumn + " = '" + this.foreignColumn + "'";
+        // foreignColumn holds the value compared to here, written as a string literal
+        return SqlIdentifiers.reference(this.primaryTableAlias) + "." + SqlIdentifiers.reference(this.primaryColumn) + " = " + SqlIdentifiers.stringLiteral(this.foreignColumn);
     }
 
     public enum JoinType {

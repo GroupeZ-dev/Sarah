@@ -59,7 +59,7 @@ public class InsertRequest implements Executor {
             preparedStatement.executeUpdate();
             return readGeneratedKey(preparedStatement);
         } catch (SQLException exception) {
-            logger.info("Insert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            logger.error("Insert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("insert", this.schema.getTableName(), exception);
         }
     }

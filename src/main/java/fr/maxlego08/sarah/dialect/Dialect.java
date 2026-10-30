@@ -7,6 +7,7 @@ import fr.maxlego08.sarah.database.Schema;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -98,4 +99,11 @@ public interface Dialect {
      * Data source properties for the Hikari pool.
      */
     Map<String, String> dataSourceProperties();
+
+    /**
+     * Driver properties of an unpooled connection, before the configuration's own properties.
+     */
+    default Map<String, String> connectionProperties() {
+        return new HashMap<>();
+    }
 }

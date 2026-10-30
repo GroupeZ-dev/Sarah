@@ -2,6 +2,7 @@ package fr.maxlego08.sarah.conditions;
 
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.dialect.Dialect;
+import fr.maxlego08.sarah.security.SqlIdentifiers;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,7 +67,7 @@ public class ColumnDefinition {
             sizedType = columnType;
         }
 
-        StringBuilder columnSQL = new StringBuilder("`" + name + "` ");
+        StringBuilder columnSQL = new StringBuilder(SqlIdentifiers.quote(name) + " ");
         if (isAutoIncrement && isPrimaryKey) {
             columnSQL.append(dialect.autoIncrementColumn(sizedType));
             if (dialect.inlineAutoIncrementPrimaryKey()) {
@@ -107,7 +108,7 @@ public class ColumnDefinition {
     }
 
     public String getSafeName() {
-        return String.format("`%s`", this.name);
+        return SqlIdentifiers.quote(this.name);
     }
 
     public String getType() {

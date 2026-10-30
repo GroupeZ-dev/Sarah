@@ -4,6 +4,9 @@ import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.dialect.Dialect;
 import fr.maxlego08.sarah.dialect.Dialects;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -27,6 +30,20 @@ public class DatabaseConfiguration {
      * {@code 0} disables retirement. Hikari rejects values below 30 seconds.
      */
     private final Long maxLifetime;
+    /**
+     * Hikari connection timeout in milliseconds. {@code null} keeps the library default.
+     */
+    private final Long connectionTimeout;
+    /**
+     * Hikari leak detection threshold in milliseconds. {@code 0} disables it, {@code null} keeps
+     * the library default.
+     */
+    private final Long leakDetectionThreshold;
+    /**
+     * Driver properties added to, or replacing, the ones Sarah sets, for example
+     * {@code useSSL=true} or {@code sslmode=require}.
+     */
+    private final Map<String, String> properties;
 
     public DatabaseConfiguration(String tablePrefix, String user, String password, int port, String host,
                                  String database, boolean debug, DatabaseType databaseType) {
@@ -42,6 +59,14 @@ public class DatabaseConfiguration {
     public DatabaseConfiguration(String tablePrefix, String user, String password, int port, String host,
                                  String database, boolean debug, DatabaseType databaseType,
                                  Integer maximumPoolSize, Integer minimumIdle, Long maxLifetime) {
+        this(tablePrefix, user, password, port, host, database, debug, databaseType, maximumPoolSize, minimumIdle, maxLifetime,
+                null, null, Collections.emptyMap());
+    }
+
+    private DatabaseConfiguration(String tablePrefix, String user, String password, int port, String host,
+                                  String database, boolean debug, DatabaseType databaseType,
+                                  Integer maximumPoolSize, Integer minimumIdle, Long maxLifetime,
+                                  Long connectionTimeout, Long leakDetectionThreshold, Map<String, String> properties) {
         this.tablePrefix = tablePrefix;
         this.user = user;
         this.password = password;
@@ -53,6 +78,9 @@ public class DatabaseConfiguration {
         this.maximumPoolSize = maximumPoolSize;
         this.minimumIdle = minimumIdle;
         this.maxLifetime = maxLifetime;
+        this.connectionTimeout = connectionTimeout;
+        this.leakDetectionThreshold = leakDetectionThreshold;
+        this.properties = Collections.unmodifiableMap(new LinkedHashMap<>(properties));
     }
 
     public static DatabaseConfiguration create(String user, String password, int port, String host, String database, DatabaseType databaseType) {
@@ -158,9 +186,51 @@ public class DatabaseConfiguration {
         return maxLifetime;
     }
 
+    public Long getConnectionTimeout() {
+        return connectionTimeout;
+    }
+
+    public Long getLeakDetectionThreshold() {
+        return leakDetectionThreshold;
+    }
+
+    /**
+     * @return the driver properties set with {@link #withProperty(String, String)}
+     */
+    public Map<String, String> getProperties() {
+        return properties;
+    }
+
     public DatabaseConfiguration withPoolSettings(Integer maximumPoolSize, Integer minimumIdle) {
         return new DatabaseConfiguration(this.tablePrefix, this.user, this.password, this.port, this.host,
-                this.database, this.debug, this.databaseType, maximumPoolSize, minimumIdle, this.maxLifetime);
+                this.database, this.debug, this.databaseType, maximumPoolSize, minimumIdle, this.maxLifetime,
+                this.connectionTimeout, this.leakDetectionThreshold, this.properties);
+    }
+
+    /**
+     * @param connectionTimeout      how long, in milliseconds, to wait for a pooled connection, or
+     *                               {@code null} for the default (10 seconds)
+     * @param leakDetectionThreshold how long, in milliseconds, a connection can be held before
+     *                               Hikari logs a possible leak, {@code 0} to disable, or
+     *                               {@code null} for the default (10 seconds)
+     */
+    public DatabaseConfiguration withTimeouts(Long connectionTimeout, Long leakDetectionThreshold) {
+        return new DatabaseConfiguration(this.tablePrefix, this.user, this.password, this.port, this.host,
+                this.database, this.debug, this.databaseType, this.maximumPoolSize, this.minimumIdle, this.maxLifetime,
+                connectionTimeout, leakDetectionThreshold, this.properties);
+    }
+
+    /**
+     * Adds a driver property, used by pooled and plain connections. It replaces a property Sarah
+     * sets with the same name, for example {@code withProperty("useSSL", "true")} on MySQL or
+     * {@code withProperty("sslmode", "require")} on PostgreSQL.
+     */
+    public DatabaseConfiguration withProperty(String key, String value) {
+        Map<String, String> properties = new LinkedHashMap<>(this.properties);
+        properties.put(key, value);
+        return new DatabaseConfiguration(this.tablePrefix, this.user, this.password, this.port, this.host,
+                this.database, this.debug, this.databaseType, this.maximumPoolSize, this.minimumIdle, this.maxLifetime,
+                this.connectionTimeout, this.leakDetectionThreshold, properties);
     }
 
     /**
@@ -168,7 +238,8 @@ public class DatabaseConfiguration {
      */
     public DatabaseConfiguration withMaxLifetime(Long maxLifetime) {
         return new DatabaseConfiguration(this.tablePrefix, this.user, this.password, this.port, this.host,
-                this.database, this.debug, this.databaseType, this.maximumPoolSize, this.minimumIdle, maxLifetime);
+                this.database, this.debug, this.databaseType, this.maximumPoolSize, this.minimumIdle, maxLifetime,
+                this.connectionTimeout, this.leakDetectionThreshold, this.properties);
     }
 
     @Override
@@ -186,12 +257,16 @@ public class DatabaseConfiguration {
                 databaseType == that.databaseType &&
                 Objects.equals(maximumPoolSize, that.maximumPoolSize) &&
                 Objects.equals(minimumIdle, that.minimumIdle) &&
-                Objects.equals(maxLifetime, that.maxLifetime);
+                Objects.equals(maxLifetime, that.maxLifetime) &&
+                Objects.equals(connectionTimeout, that.connectionTimeout) &&
+                Objects.equals(leakDetectionThreshold, that.leakDetectionThreshold) &&
+                Objects.equals(properties, that.properties);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(tablePrefix, user, password, port, host, database, debug, databaseType, maximumPoolSize, minimumIdle, maxLifetime);
+        return Objects.hash(tablePrefix, user, password, port, host, database, debug, databaseType, maximumPoolSize, minimumIdle, maxLifetime,
+                connectionTimeout, leakDetectionThreshold, properties);
     }
 
     @Override
@@ -199,7 +274,7 @@ public class DatabaseConfiguration {
         return "DatabaseConfiguration{" +
                 "tablePrefix='" + tablePrefix + '\'' +
                 ", user='" + user + '\'' +
-                ", password='" + password + '\'' +
+                ", password=" + (password == null ? "null" : "'****'") +
                 ", port=" + port +
                 ", host='" + host + '\'' +
                 ", database='" + database + '\'' +
@@ -208,6 +283,9 @@ public class DatabaseConfiguration {
                 ", maximumPoolSize=" + maximumPoolSize +
                 ", minimumIdle=" + minimumIdle +
                 ", maxLifetime=" + maxLifetime +
+                ", connectionTimeout=" + connectionTimeout +
+                ", leakDetectionThreshold=" + leakDetectionThreshold +
+                ", properties=" + properties.keySet() +
                 '}';
     }
 }

@@ -36,6 +36,7 @@ public class SqliteConnection extends DatabaseConnection {
         }
 
         Properties properties = new Properties();
+        properties.putAll(this.databaseConfiguration.getProperties());
         if (this.journalMode != null) {
             properties.setProperty("journal_mode", this.journalMode);
         }
@@ -80,15 +81,5 @@ public class SqliteConnection extends DatabaseConnection {
 
     public void setFileName(String fileName) {
         this.fileName = fileName;
-    }
-
-    @Override
-    public Connection getConnection() {
-        try {
-            return connectToDatabase();
-        } catch (Exception exception) {
-            connect();
-            return connection;
-        }
     }
 }

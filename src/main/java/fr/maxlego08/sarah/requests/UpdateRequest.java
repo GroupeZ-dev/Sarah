@@ -68,7 +68,7 @@ public class UpdateRequest implements Executor {
             // croyait donc avoir perdu la course a chaque fois, sur toutes les bases SQLite.
             return preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            logger.info("Update operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            logger.error("Update operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("update", this.schema.getTableName(), exception);
         }
     }

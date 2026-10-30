@@ -429,9 +429,9 @@ public interface Schema {
 
     Schema whereIn(String columnName, Object... objects);
 
-    Schema whereIn(String columnName, List<?> values);
+    Schema whereIn(String columnName, List<String> strings);
 
-    Schema whereIn(String tablePrefix, String columnName, List<?> values);
+    Schema whereIn(String tablePrefix, String columnName, List<String> strings);
 
     /**
      * Adds a LEFT JOIN to the query.

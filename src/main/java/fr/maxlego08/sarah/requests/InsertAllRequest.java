@@ -57,7 +57,7 @@ public class InsertAllRequest implements Executor {
         try (Connection connection = databaseConnection.getConnection(); PreparedStatement preparedStatement = connection.prepareStatement(insertQuery)) {
             preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            logger.info("Insert all operation failed from table: " + this.schema.getTableName() + " to table: " + this.toTableName + " - " + exception.getMessage());
+            logger.error("Insert all operation failed from table: " + this.schema.getTableName() + " to table: " + this.toTableName + " - " + exception.getMessage());
             throw new DatabaseException("insertAll", this.toTableName, exception);
         }
 

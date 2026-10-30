@@ -3,8 +3,7 @@ package fr.maxlego08.sarah;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
-import java.util.Properties;
+import java.sql.SQLException;
 
 /**
  * Unpooled PostgreSQL connection. Prefer {@link HikariDatabaseConnection} with
@@ -17,10 +16,7 @@ public class PostgreSqlConnection extends DatabaseConnection {
     }
 
     @Override
-    public Connection connectToDatabase() throws Exception {
-        Properties properties = new Properties();
-        properties.setProperty("user", databaseConfiguration.getUser());
-        properties.setProperty("password", databaseConfiguration.getPassword());
-        return DriverManager.getConnection(databaseConfiguration.getDialect().jdbcUrl(databaseConfiguration), properties);
+    public Connection connectToDatabase() throws SQLException {
+        return this.openDriverConnection();
     }
 }

@@ -44,7 +44,7 @@ public class CreateIndexRequest implements Executor {
             preparedStatement.execute();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            logger.info("Create index operation failed on table: " + tableName + " - " + exception.getMessage());
+            logger.error("Create index operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("createIndex", tableName, exception);
         }
 

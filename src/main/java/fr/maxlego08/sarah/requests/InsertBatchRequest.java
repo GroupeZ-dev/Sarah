@@ -75,7 +75,7 @@ public class InsertBatchRequest implements Executor {
             int generatedKey = InsertRequest.readGeneratedKey(preparedStatement);
             return generatedKey != 0 ? generatedKey : updatedRows;
         } catch (SQLException exception) {
-            logger.info("Insert batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
+            logger.error("Insert batch operation failed on table: " + firstSchema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("insertBatch", firstSchema.getTableName(), exception);
         }
     }

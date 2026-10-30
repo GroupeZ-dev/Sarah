@@ -1,14 +1,17 @@
 package fr.maxlego08.sarah;
 
+import fr.maxlego08.sarah.dialect.Dialect;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.transaction.Transaction;
 
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Properties;
 
 /**
- * Represents a connection to a MySQL database.
+ * Represents a connection to a database.
  * This class handles establishing and managing the connection to the database.
  */
 public abstract class DatabaseConnection {
@@ -47,7 +50,7 @@ public abstract class DatabaseConnection {
             try (Connection tempConnection = this.connectToDatabase()) {
                 return isConnected(tempConnection);
             } catch (Exception exception) {
-                this.logger.info("Failed to validate database connection: " + exception.getMessage());
+                this.logger.error("Failed to validate database connection: " + exception.getMessage());
                 return false;
             }
         }
@@ -81,7 +84,7 @@ public abstract class DatabaseConnection {
             try {
                 connection.close();
             } catch (SQLException exception) {
-                this.logger.info("Failed to disconnect from database: " + exception.getMessage());
+                this.logger.error("Failed to disconnect from database: " + exception.getMessage());
             }
         }
     }
@@ -94,7 +97,7 @@ public abstract class DatabaseConnection {
             try {
                 connection = this.connectToDatabase();
             } catch (Exception exception) {
-                this.logger.info("Failed to connect to database: " + exception.getMessage());
+                this.logger.error("Failed to connect to database: " + exception.getMessage());
                 throw new DatabaseException("connect", exception);
             }
         }
@@ -103,14 +106,39 @@ public abstract class DatabaseConnection {
     public abstract Connection connectToDatabase() throws Exception;
 
     /**
-     * Gets the connection to the database.
-     * If the connection is not established, it attempts to connect first.
+     * Opens a connection with {@link DriverManager}, using the dialect's URL and connection
+     * properties, then the properties of the configuration.
+     */
+    protected Connection openDriverConnection() throws SQLException {
+        Dialect dialect = this.databaseConfiguration.getDialect();
+        try {
+            // Plugin class loaders do not always expose the driver to DriverManager's service loader
+            Class.forName(dialect.driverClassName());
+        } catch (ClassNotFoundException ignored) {
+        }
+
+        Properties properties = new Properties();
+        properties.putAll(dialect.connectionProperties());
+        properties.putAll(this.databaseConfiguration.getProperties());
+        properties.setProperty("user", this.databaseConfiguration.getUser());
+        properties.setProperty("password", this.databaseConfiguration.getPassword());
+        return DriverManager.getConnection(dialect.jdbcUrl(this.databaseConfiguration), properties);
+    }
+
+    /**
+     * Opens a new connection to the database. Every request closes the connection it gets, so
+     * each call returns its own connection rather than one shared between requests and threads.
      *
-     * @return The database connection.
+     * @return a new database connection, which the caller must close
+     * @throws DatabaseException if the connection cannot be opened
      */
     public Connection getConnection() {
-        connect();
-        return connection;
+        try {
+            return this.connectToDatabase();
+        } catch (Exception exception) {
+            this.logger.error("Failed to connect to database: " + exception.getMessage());
+            throw new DatabaseException("connect", exception);
+        }
     }
 
     /**
@@ -130,7 +158,7 @@ public abstract class DatabaseConnection {
         try {
             return new Transaction(getConnection());
         } catch (SQLException exception) {
-            this.logger.info("Failed to begin transaction: " + exception.getMessage());
+            this.logger.error("Failed to begin transaction: " + exception.getMessage());
             throw new DatabaseException("begin-transaction", exception);
         }
     }

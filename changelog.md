@@ -19,6 +19,9 @@
 * **Raw SQL.** `RequestHelper#execute(sql, params...)` returns the number of rows changed, and `RequestHelper#query(sql, RowMapper, params...)` maps each row. Both replace `%prefix%` and adapt quoting for the engine.
 * **Transactions.** `RequestHelper#inTransaction(tx -> ...)` runs several operations on one connection. It commits when the callback returns and rolls back when it throws. Only calls made through `tx` are part of the transaction.
 * **SQLite options.** `SqliteConnection#setJournalMode("WAL")` and `#setBusyTimeout(ms)`.
+* **Driver properties.** `DatabaseConfiguration#withProperty(key, value)` adds or replaces a driver property on pooled and plain connections, for example `withProperty("useSSL", "true")` on MySQL or `withProperty("sslmode", "require")` on PostgreSQL.
+* **Pool timeouts.** `DatabaseConfiguration#withTimeouts(connectionTimeout, leakDetectionThreshold)`, in milliseconds. `0` disables leak detection, which otherwise warns about any connection held for more than 10 seconds, such as a long transaction.
+* **Log levels.** `Logger` has `warn` and `error`, which default to `info` so existing implementations keep working. `JULogger` maps them to `WARNING` and `SEVERE`, and failed operations are now logged with `error`.
 
 ### Changes
 
@@ -26,6 +29,11 @@
 * **Breaking:** `RequestHelper#select`, `#selectAll` and `#count` now throw `DatabaseException` when the query fails. They used to log the error and return an empty list or 0, which a caller could mistake for "no data" and then overwrite.
 * Parameters are bound the same way on every driver: `java.util.Date` is sent as a `Timestamp`, `UUID` and enums as strings.
 * An insert no longer fails after writing its row when the driver cannot report generated keys for the table.
+* Names and operators written into statements are checked, so they cannot carry SQL of their own. Only what no legitimate value contains is rejected, with an `IllegalArgumentException`: a statement separator (`;`), a comment (`--`, `/*`), a quote ending a quoted column name, or a `where` operator that is neither comparison symbols nor keywords such as `LIKE`, `NOT LIKE`, `REGEXP` or `IS NOT`. `orderBy`, table names, prefixes and aliases are otherwise written as before.
+* The value of `JoinCondition.and(...)` is escaped as a string literal.
+* MySQL and MariaDB still enable `allowMultiQueries` by default, now as a driver property instead of a URL parameter, so `withProperty("allowMultiQueries", "false")` turns it off.
+* `MySqlConnection`, `MariaDbConnection` and `PostgreSqlConnection` open a new connection for each request. They used to share one connection that every request closed, so each query reconnected and two threads could close each other's connection. They use the dialect's URL with the same driver properties as before, plus the configuration's. A connection obtained from `getConnection()` must be closed by the caller.
+* `DatabaseConfiguration#toString()` no longer prints the password.
 
 ### Fixes
 
@@ -37,10 +45,10 @@
 * PostgreSQL inserts return the generated id even when the insert schema does not declare the auto-increment column.
 * `MigrationManager.execute` can run more than once in the same JVM (on another database, or the same one again). Each run registered every schema of the migrations again, so the next run created each table and index twice and failed on the index.
 * PostgreSQL inserts only ask the driver for auto-increment columns as generated keys. Otherwise the driver returned the whole row and the first column was read as the id.
-* `whereIn` binds values with their own type instead of turning them into strings, which PostgreSQL rejects for a numeric column. `Schema#whereIn` now takes a `List<?>` and `WhereCondition#getValues()` returns a `List<Object>`.
+* On PostgreSQL, `whereIn(column, values...)` binds values with their own type instead of turning them into strings, which PostgreSQL rejects for a numeric column. MySQL, MariaDB and SQLite still receive strings, as before. `WhereCondition#getParameters()` returns the values with their type; `getValues()` still returns strings.
 * `addSelect(prefix, column, alias)` and `addSelect(prefix, column, alias, default)` no longer drop the table prefix, which made a column present in both tables of a join ambiguous.
-* Selects read each column by its label, so an alias is the map key on MySQL too, whose driver reports the original column name.
-* Mapping rows into a class skips `@TransientField`, static and synthetic fields, as writing does, and uses the constructor taking one parameter per mapped field instead of the first declared one. A class with a transient field used to fail or receive the wrong values.
+* Selects key each column by its label too, so an alias is a map key on MySQL, whose driver reports the original column name. The original name stays available as before.
+* Mapping rows into a class skips `@TransientField`, static and synthetic fields, as writing does, and uses the constructor taking one parameter per mapped field. A class with a transient field used to fail or receive the wrong values. Classes without such a constructor are mapped as before.
 * `MigrationManager.execute` throws when it cannot read the migrations table instead of treating it as empty and running every migration again.
 * A migration is recorded once, after all of its schemas ran. When one of them failed, the migration was already recorded and the remaining schemas never ran. Adding missing columns to a create-or-alter migration no longer records it a second time.
 * `count` reads the count as a `long` instead of an `int`.

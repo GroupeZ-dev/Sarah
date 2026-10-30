@@ -24,6 +24,7 @@ import fr.maxlego08.sarah.requests.RenameExecutor;
 import fr.maxlego08.sarah.requests.UpdateRequest;
 import fr.maxlego08.sarah.requests.UpsertRequest;
 import fr.maxlego08.sarah.security.SecureObjectInputStream;
+import fr.maxlego08.sarah.security.SqlIdentifiers;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -47,6 +48,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -70,7 +72,7 @@ public class SchemaBuilder implements Schema {
     private Integer offset;
 
     private SchemaBuilder(String tableName, SchemaType schemaType) {
-        this.tableName = tableName;
+        this.tableName = SqlIdentifiers.reference(tableName);
         this.schemaType = schemaType;
     }
 
@@ -99,7 +101,7 @@ public class SchemaBuilder implements Schema {
 
     public static Schema rename(Migration migration, String tableName, String newTableName) {
         SchemaBuilder schema = new SchemaBuilder(tableName, SchemaType.RENAME);
-        schema.newTableName = newTableName;
+        schema.newTableName = SqlIdentifiers.reference(newTableName);
         if (migration != null) {
             schema.migration = migration;
             MigrationManager.registerSchema(schema);
@@ -235,15 +237,15 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
-    public Schema whereIn(String columnName, List<?> values) {
-        this.whereConditions.add(new WhereCondition(null, columnName, values));
+    public Schema whereIn(String columnName, List<String> strings) {
+        this.whereConditions.add(new WhereCondition(null, columnName, strings));
         return this;
     }
 
     // Method with table prefix - use List to avoid ambiguity with varargs version
     @Override
-    public Schema whereIn(String tablePrefix, String columnName, List<?> values) {
-        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, values));
+    public Schema whereIn(String tablePrefix, String columnName, List<String> strings) {
+        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, strings));
         return this;
     }
 
@@ -388,7 +390,7 @@ public class SchemaBuilder implements Schema {
         if (this.columns.isEmpty()) throw new IllegalStateException("No column defined to apply foreign key.");
         ColumnDefinition lastColumn = this.columns.get(this.columns.size() - 1);
 
-        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(`%s`)%s", lastColumn.getSafeName(), safeTable(referenceTable), columnName, onCascade ? " ON DELETE CASCADE" : "");
+        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(%s)%s", lastColumn.getSafeName(), safeTable(referenceTable), SqlIdentifiers.quote(columnName), onCascade ? " ON DELETE CASCADE" : "");
         this.foreignKeys.add(fkDefinition);
         return this;
     }
@@ -398,7 +400,7 @@ public class SchemaBuilder implements Schema {
      * Works with %prefix% placeholders since they are replaced after SQL generation.
      */
     private String safeTable(String tableName) {
-        return "`" + tableName + "`";
+        return "`" + SqlIdentifiers.reference(tableName) + "`";
     }
 
     @Override
@@ -559,7 +561,7 @@ public class SchemaBuilder implements Schema {
                 }
             }
         } catch (SQLException exception) {
-            logger.info("Failed to execute schema select count: " + exception.getMessage());
+            logger.error("Failed to execute schema select count: " + exception.getMessage());
             throw new SQLException("Failed to execute schema select count: " + exception.getMessage(), exception);
         }
         return 0;
@@ -614,14 +616,17 @@ public class SchemaBuilder implements Schema {
                 while (resultSet.next()) {
                     Map<String, Object> row = new HashMap<>();
                     for (int i = 1; i <= columnCount; i++) {
-                        // The label is the alias when there is one; MySQL reports the original name as the column name
-                        row.put(metaData.getColumnLabel(i), resultSet.getObject(i));
+                        // The label is the alias when there is one. MySQL reports the original name as the
+                        // column name, which was the key before, so it stays available unless another column uses it.
+                        Object value = resultSet.getObject(i);
+                        row.put(metaData.getColumnLabel(i), value);
+                        row.putIfAbsent(metaData.getColumnName(i), value);
                     }
                     results.add(row);
                 }
             }
         } catch (SQLException exception) {
-            logger.info("Failed to execute schema select: " + exception.getMessage());
+            logger.error("Failed to execute schema select: " + exception.getMessage());
             throw new SQLException("Failed to execute schema select: " + exception.getMessage(), exception);
         }
 
@@ -630,17 +635,28 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void applyWhereConditions(PreparedStatement preparedStatement, int index) throws SQLException {
+        Boolean typedInValues = null;
         for (WhereCondition condition : this.whereConditions) {
             if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
                 StatementBinder.bind(preparedStatement, index, condition.getValue());
                 index += 1;
             } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN) {
-                for (Object value : condition.getValues()) {
+                if (typedInValues == null) {
+                    typedInValues = isPostgreSql(preparedStatement);
+                }
+                // IN values have always been sent as strings, which MySQL, MariaDB and SQLite compare
+                // as before. PostgreSQL refuses a number column compared to text, so it gets the values' types.
+                List<?> values = typedInValues ? condition.getParameters() : condition.getValues();
+                for (Object value : values) {
                     StatementBinder.bind(preparedStatement, index, value);
                     index += 1;
                 }
             }
         }
+    }
+
+    private static boolean isPostgreSql(PreparedStatement preparedStatement) throws SQLException {
+        return preparedStatement.getConnection().getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql");
     }
 
     @Override
@@ -653,6 +669,11 @@ public class SchemaBuilder implements Schema {
         List<T> transformedResults = new ArrayList<>();
         Field[] fields = ConsumerConstructor.mappedFields(clazz);
         Constructor<?> constructor = findMappingConstructor(clazz, fields);
+        if (constructor == null) {
+            // Historical behaviour: first declared constructor, every declared field by position
+            constructor = clazz.getDeclaredConstructors()[0];
+            fields = clazz.getDeclaredFields();
+        }
         constructor.setAccessible(true);
 
         String[] columnNames = new String[fields.length];
@@ -661,9 +682,10 @@ public class SchemaBuilder implements Schema {
             columnNames[i] = column != null && !column.value().isEmpty() ? column.value() : fields[i].getName();
         }
 
+        int parameterCount = constructor.getParameterCount();
         for (Map<String, Object> row : results) {
-            Object[] params = new Object[fields.length];
-            for (int i = 0; i < fields.length; i++) {
+            Object[] params = new Object[parameterCount];
+            for (int i = 0; i < Math.min(fields.length, parameterCount); i++) {
                 params[i] = convertToRequiredType(row.get(columnNames[i]), fields[i].getType());
             }
             T instance = (T) constructor.newInstance(params);
@@ -675,6 +697,8 @@ public class SchemaBuilder implements Schema {
     /**
      * Finds the constructor taking one parameter per mapped field, preferring one whose parameter
      * types match the fields in order.
+     *
+     * @return the constructor, or {@code null} when none takes one parameter per mapped field
      */
     private Constructor<?> findMappingConstructor(Class<?> clazz, Field[] fields) {
         Constructor<?> sameCount = null;
@@ -696,9 +720,6 @@ public class SchemaBuilder implements Schema {
             if (sameCount == null) {
                 sameCount = constructor;
             }
-        }
-        if (sameCount == null) {
-            throw new SarahException("No constructor of " + clazz.getName() + " takes " + fields.length + " parameters, one per mapped field");
         }
         return sameCount;
     }
@@ -845,12 +866,12 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void orderBy(String columnName) {
-        this.orderBy = String.format("ORDER BY %s", columnName);
+        this.orderBy = String.format("ORDER BY %s", SqlIdentifiers.expression(columnName));
     }
 
     @Override
     public void orderByDesc(String columnName) {
-        this.orderBy = String.format("ORDER BY %s DESC", columnName);
+        this.orderBy = String.format("ORDER BY %s DESC", SqlIdentifiers.expression(columnName));
     }
 
     @Override

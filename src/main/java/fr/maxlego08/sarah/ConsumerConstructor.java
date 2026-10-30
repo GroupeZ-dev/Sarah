@@ -40,12 +40,18 @@ public class ConsumerConstructor {
         Constructor<?>[] constructors = template.getDeclaredConstructors();
 
         Field[] fields = mappedFields(template);
+        // Static fields used to be counted, so a constructor matching that count is still accepted
+        long countWithStatic = Arrays.stream(template.getDeclaredFields())
+                .filter(f -> !f.isSynthetic())
+                .filter(f -> !f.isAnnotationPresent(TransientField.class))
+                .count();
 
         boolean hasCompatibleConstructor = Arrays.stream(constructors)
                 .peek(constructor -> constructor.setAccessible(true))
-                .anyMatch(constructor -> Arrays.stream(constructor.getParameters())
+                .map(constructor -> Arrays.stream(constructor.getParameters())
                         .filter(p -> !p.isSynthetic())
-                        .count() == fields.length);
+                        .count())
+                .anyMatch(count -> count == fields.length || count == countWithStatic);
 
         if (!hasCompatibleConstructor) {
             throw new IllegalArgumentException("Fields count does not match constructor parameters count");
