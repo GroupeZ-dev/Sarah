@@ -37,6 +37,14 @@
 * PostgreSQL inserts return the generated id even when the insert schema does not declare the auto-increment column.
 * `MigrationManager.execute` can run more than once in the same JVM (on another database, or the same one again). Each run registered every schema of the migrations again, so the next run created each table and index twice and failed on the index.
 * PostgreSQL inserts only ask the driver for auto-increment columns as generated keys. Otherwise the driver returned the whole row and the first column was read as the id.
+* `whereIn` binds values with their own type instead of turning them into strings, which PostgreSQL rejects for a numeric column. `Schema#whereIn` now takes a `List<?>` and `WhereCondition#getValues()` returns a `List<Object>`.
+* `addSelect(prefix, column, alias)` and `addSelect(prefix, column, alias, default)` no longer drop the table prefix, which made a column present in both tables of a join ambiguous.
+* Selects read each column by its label, so an alias is the map key on MySQL too, whose driver reports the original column name.
+* Mapping rows into a class skips `@TransientField`, static and synthetic fields, as writing does, and uses the constructor taking one parameter per mapped field instead of the first declared one. A class with a transient field used to fail or receive the wrong values.
+* `MigrationManager.execute` throws when it cannot read the migrations table instead of treating it as empty and running every migration again.
+* A migration is recorded once, after all of its schemas ran. When one of them failed, the migration was already recorded and the remaining schemas never ran. Adding missing columns to a create-or-alter migration no longer records it a second time.
+* `count` reads the count as a `long` instead of an `int`.
+* `timestamps()` and `updatedAt()` no longer need `MigrationManager.setDatabaseConfiguration`: the `updated_at` default is taken from the dialect when the table is created.
 
 ### Tests
 

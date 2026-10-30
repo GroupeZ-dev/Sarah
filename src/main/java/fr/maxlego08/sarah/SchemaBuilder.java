@@ -37,6 +37,7 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.text.ParseException;
@@ -228,22 +229,21 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public Schema whereIn(String columnName, Object... objects) {
-        // Convert varargs to List to avoid ambiguity
-        List<String> valuesList = Arrays.stream(objects).map(String::valueOf).collect(Collectors.toList());
-        this.whereConditions.add(new WhereCondition(null, columnName, valuesList));
+        // Values keep their type: PostgreSQL rejects an integer column compared to text
+        this.whereConditions.add(new WhereCondition(null, columnName, Arrays.asList(objects)));
         return this;
     }
 
     @Override
-    public Schema whereIn(String columnName, List<String> strings) {
-        this.whereConditions.add(new WhereCondition(null, columnName, strings));
+    public Schema whereIn(String columnName, List<?> values) {
+        this.whereConditions.add(new WhereCondition(null, columnName, values));
         return this;
     }
 
     // Method with table prefix - use List to avoid ambiguity with varargs version
     @Override
-    public Schema whereIn(String tablePrefix, String columnName, List<String> strings) {
-        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, strings));
+    public Schema whereIn(String tablePrefix, String columnName, List<?> values) {
+        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, values));
         return this;
     }
 
@@ -426,11 +426,8 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public Schema updatedAt() {
-        ColumnDefinition column = new ColumnDefinition("updated_at", "TIMESTAMP");
-
-        DatabaseConfiguration configuration = MigrationManager.getDatabaseConfiguration();
-        column.setDefaultValue(configuration.getDialect().updatedAtDefault());
-        this.columns.add(column);
+        // The default depends on the dialect, which is only known when the column is built
+        this.columns.add(new ColumnDefinition("updated_at", "TIMESTAMP").setUpdatedAtDefault(true));
         return this;
     }
 
@@ -558,7 +555,7 @@ public class SchemaBuilder implements Schema {
 
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 if (resultSet.next()) {
-                    return resultSet.getInt(1);
+                    return resultSet.getLong(1);
                 }
             }
         } catch (SQLException exception) {
@@ -612,10 +609,13 @@ public class SchemaBuilder implements Schema {
             applyWhereConditions(preparedStatement, 1);
 
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                ResultSetMetaData metaData = resultSet.getMetaData();
+                int columnCount = metaData.getColumnCount();
                 while (resultSet.next()) {
                     Map<String, Object> row = new HashMap<>();
-                    for (int i = 1; i <= resultSet.getMetaData().getColumnCount(); i++) {
-                        row.put(resultSet.getMetaData().getColumnName(i), resultSet.getObject(i));
+                    for (int i = 1; i <= columnCount; i++) {
+                        // The label is the alias when there is one; MySQL reports the original name as the column name
+                        row.put(metaData.getColumnLabel(i), resultSet.getObject(i));
                     }
                     results.add(row);
                 }
@@ -635,7 +635,7 @@ public class SchemaBuilder implements Schema {
                 StatementBinder.bind(preparedStatement, index, condition.getValue());
                 index += 1;
             } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN) {
-                for (String value : condition.getValues()) {
+                for (Object value : condition.getValues()) {
                     StatementBinder.bind(preparedStatement, index, value);
                     index += 1;
                 }
@@ -651,27 +651,56 @@ public class SchemaBuilder implements Schema {
 
     private <T> List<T> transformResults(List<Map<String, Object>> results, Class<T> clazz) throws Exception {
         List<T> transformedResults = new ArrayList<>();
-        Constructor<?>[] constructors = clazz.getDeclaredConstructors();
-        Constructor<?> firstConstructor = constructors[0];
-        firstConstructor.setAccessible(true);
+        Field[] fields = ConsumerConstructor.mappedFields(clazz);
+        Constructor<?> constructor = findMappingConstructor(clazz, fields);
+        constructor.setAccessible(true);
+
+        String[] columnNames = new String[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            Column column = fields[i].getAnnotation(Column.class);
+            columnNames[i] = column != null && !column.value().isEmpty() ? column.value() : fields[i].getName();
+        }
 
         for (Map<String, Object> row : results) {
-            Object[] params = new Object[firstConstructor.getParameterCount()];
-            Field[] fields = clazz.getDeclaredFields();
-
+            Object[] params = new Object[fields.length];
             for (int i = 0; i < fields.length; i++) {
-                Field field = fields[i];
-                if (field.isAnnotationPresent(Column.class)) {
-                    Column column = field.getAnnotation(Column.class);
-                    params[i] = convertToRequiredType(row.get(column.value()), field.getType());
-                } else {
-                    params[i] = convertToRequiredType(row.get(field.getName()), field.getType());
-                }
+                params[i] = convertToRequiredType(row.get(columnNames[i]), fields[i].getType());
             }
-            T instance = (T) firstConstructor.newInstance(params);
+            T instance = (T) constructor.newInstance(params);
             transformedResults.add(instance);
         }
         return transformedResults;
+    }
+
+    /**
+     * Finds the constructor taking one parameter per mapped field, preferring one whose parameter
+     * types match the fields in order.
+     */
+    private Constructor<?> findMappingConstructor(Class<?> clazz, Field[] fields) {
+        Constructor<?> sameCount = null;
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            Class<?>[] parameterTypes = constructor.getParameterTypes();
+            if (parameterTypes.length != fields.length) {
+                continue;
+            }
+            boolean typesMatch = true;
+            for (int i = 0; i < fields.length; i++) {
+                if (parameterTypes[i] != fields[i].getType()) {
+                    typesMatch = false;
+                    break;
+                }
+            }
+            if (typesMatch) {
+                return constructor;
+            }
+            if (sameCount == null) {
+                sameCount = constructor;
+            }
+        }
+        if (sameCount == null) {
+            throw new SarahException("No constructor of " + clazz.getName() + " takes " + fields.length + " parameters, one per mapped field");
+        }
+        return sameCount;
     }
 
     protected Object convertToRequiredType(Object value, Class<?> type) {
@@ -895,12 +924,12 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void addSelect(String prefix, String selectedColumn, String aliases) {
-        this.selectColumns.add(new SelectCondition(null, selectedColumn, aliases, false, null));
+        this.selectColumns.add(new SelectCondition(prefix, selectedColumn, aliases, false, null));
     }
 
     @Override
     public void addSelect(String prefix, String selectedColumn, String aliases, Object defaultValue) {
-        this.selectColumns.add(new SelectCondition(null, selectedColumn, aliases, true, defaultValue));
+        this.selectColumns.add(new SelectCondition(prefix, selectedColumn, aliases, true, defaultValue));
     }
 
     @Override

@@ -11,7 +11,7 @@ public class WhereCondition {
     private final String operator;
     private final WhereAction whereAction;
 
-    private final List<String> values = new ArrayList<>();
+    private final List<Object> values = new ArrayList<>();
 
     public WhereCondition(String prefix, String column, String operator, Object value) {
         this.column = (prefix == null ? "" : prefix + ".") + "`" + column + "`";
@@ -20,7 +20,7 @@ public class WhereCondition {
         this.whereAction = WhereAction.NORMAL;
     }
 
-    public WhereCondition(String prefix, String column, List<String> values) {
+    public WhereCondition(String prefix, String column, List<?> values) {
         this.column = (prefix == null ? "" : prefix + ".") + "`" + column + "`";
         this.value = null;
         this.operator = null;
@@ -62,7 +62,7 @@ public class WhereCondition {
         return whereAction;
     }
 
-    public List<String> getValues() {
+    public List<Object> getValues() {
         return values;
     }
 

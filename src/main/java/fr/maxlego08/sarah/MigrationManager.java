@@ -12,7 +12,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class MigrationManager {
@@ -88,88 +90,104 @@ public class MigrationManager {
         schemas.clear();
         MigrationManager.migrations.forEach(Migration::up);
 
-        schemas.forEach(schema -> {
-            if (!migrationsFromDatabase.contains(schema.getMigration().getClass().getSimpleName())) {
-                int result;
-                try {
-                    result = schema.execute(databaseConnection, logger);
-                } catch (SQLException exception) {
-                    throw new RuntimeException(exception);
+        // A migration is recorded once, after all of its schemas ran: recording it after the
+        // first one would skip the others for good if one of them failed.
+        Map<Migration, List<Schema>> schemasByMigration = new LinkedHashMap<>();
+        for (Schema schema : schemas) {
+            schemasByMigration.computeIfAbsent(schema.getMigration(), migration -> new ArrayList<>()).add(schema);
+        }
+
+        schemasByMigration.forEach((migration, migrationSchemas) -> {
+            if (!migrationsFromDatabase.contains(migration.getClass().getSimpleName())) {
+                boolean applied = false;
+                for (Schema schema : migrationSchemas) {
+                    try {
+                        applied |= schema.execute(databaseConnection, logger) != -1;
+                    } catch (SQLException exception) {
+                        throw new RuntimeException(exception);
+                    }
                 }
-                if (result != -1) {
-                    insertMigration(databaseConnection, logger, schema.getMigration());
+                if (applied) {
+                    insertMigration(databaseConnection, logger, migration);
                 }
             } else {
-                if (!schema.getMigration().isAlter()) {
-                    return;
+                migrationSchemas.forEach(schema -> addMissingColumns(databaseConnection, logger, schema));
+            }
+        });
+    }
+
+    /**
+     * Adds the columns of an already applied create-or-alter migration that the table lacks.
+     */
+    private static void addMissingColumns(DatabaseConnection databaseConnection, Logger logger, Schema schema) {
+        if (!schema.getMigration().isAlter()) {
+            return;
+        }
+
+        List<ColumnDefinition> mustBeAdd = new ArrayList<>();
+
+        String tableName = schema.getTableName();
+        tableName = tableName.replace("%prefix%", databaseConnection.getDatabaseConfiguration().getTablePrefix());
+
+        if (databaseConnection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.SQLITE) {
+            String query = String.format("PRAGMA table_info(%s)", tableName);
+            try (Connection connection = databaseConnection.getConnection();
+                 PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+                List<ColumnDefinition> columnDefinitions = schema.getColumns();
+                if (databaseConnection.getDatabaseConfiguration().isDebug()) {
+                    logger.info("Executing SQL: " + query);
                 }
-
-                List<ColumnDefinition> mustBeAdd = new ArrayList<>();
-
-                String tableName = schema.getTableName();
-                tableName = tableName.replace("%prefix%", databaseConnection.getDatabaseConfiguration().getTablePrefix());
-
-                if (databaseConnection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.SQLITE) {
-                    try (Connection connection = databaseConnection.getConnection();
-                         PreparedStatement preparedStatement = connection.prepareStatement(String.format("PRAGMA table_info(%s)", tableName))) {
-                        List<ColumnDefinition> columnDefinitions = schema.getColumns();
-                        logger.info("Executing SQL: " + String.format("PRAGMA table_info(%s)", tableName));
-                        try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                            while (resultSet.next()) {
-                                String columnName = resultSet.getString("name");
-                                columnDefinitions.removeIf(column -> column.getName().equals(columnName));
-                            }
-                        }
-                        mustBeAdd.addAll(columnDefinitions);
-                    } catch (SQLException exception) {
-                        logger.info("Failed to get table info for migration: " + exception.getMessage());
-                        throw new DatabaseException("migration-table-info", tableName, exception);
+                try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                    while (resultSet.next()) {
+                        String columnName = resultSet.getString("name");
+                        columnDefinitions.removeIf(column -> column.getName().equals(columnName));
                     }
+                }
+                mustBeAdd.addAll(columnDefinitions);
+            } catch (SQLException exception) {
+                logger.info("Failed to get table info for migration: " + exception.getMessage());
+                throw new DatabaseException("migration-table-info", tableName, exception);
+            }
+        } else {
+            for (ColumnDefinition column : schema.getColumns()) {
+                Schema columnExistQuery;
+                long result;
+                if (databaseConnection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.POSTGRESQL) {
+                    columnExistQuery = SchemaBuilder.selectCount("information_schema.columns")
+                            .where("table_name", tableName)
+                            .where("table_catalog", databaseConnection.getDatabaseConfiguration().getDatabase())
+                            .where("column_name", column.getName());
                 } else {
-                    for (ColumnDefinition column : schema.getColumns()) {
-                        Schema columnExistQuery;
-                        long result;
-                        if (databaseConnection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.POSTGRESQL) {
-                            columnExistQuery = SchemaBuilder.selectCount("information_schema.columns")
-                                    .where("table_name", tableName)
-                                    .where("table_catalog", databaseConnection.getDatabaseConfiguration().getDatabase())
-                                    .where("column_name", column.getName());
-                        } else {
-                            columnExistQuery = SchemaBuilder.selectCount("information_schema.COLUMNS")
-                                    .where("TABLE_NAME", tableName)
-                                    .where("TABLE_SCHEMA", databaseConnection.getDatabaseConfiguration().getDatabase())
-                                    .where("COLUMN_NAME", column.getName());
-                        }
-                        try {
-                            result = columnExistQuery.executeSelectCount(databaseConnection, logger);
-                        } catch (SQLException e) {
-                            throw new RuntimeException(e);
-                        }
-                        if (result == 0) {
-                            mustBeAdd.add(column);
-                        }
-                    }
+                    columnExistQuery = SchemaBuilder.selectCount("information_schema.COLUMNS")
+                            .where("TABLE_NAME", tableName)
+                            .where("TABLE_SCHEMA", databaseConnection.getDatabaseConfiguration().getDatabase())
+                            .where("COLUMN_NAME", column.getName());
                 }
-
-                if (mustBeAdd.isEmpty()) {
-                    return;
-                }
-
                 try {
-                    int result = SchemaBuilder.alter(null, tableName, (schemaAlter) -> {
-                        for (ColumnDefinition column : mustBeAdd) {
-                            schemaAlter.addColumn(column).nullable();
-                        }
-                    }).execute(databaseConnection, logger);
-                    if (result == -1) {
-                        insertMigration(databaseConnection, logger, schema.getMigration());
-                    }
+                    result = columnExistQuery.executeSelectCount(databaseConnection, logger);
                 } catch (SQLException e) {
                     throw new RuntimeException(e);
                 }
-
+                if (result == 0) {
+                    mustBeAdd.add(column);
+                }
             }
-        });
+        }
+
+        if (mustBeAdd.isEmpty()) {
+            return;
+        }
+
+        // The migration is already recorded, so only the columns are added here
+        try {
+            SchemaBuilder.alter(null, tableName, (schemaAlter) -> {
+                for (ColumnDefinition column : mustBeAdd) {
+                    schemaAlter.addColumn(column).nullable();
+                }
+            }).execute(databaseConnection, logger);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -208,6 +226,8 @@ public class MigrationManager {
      * @param databaseConnection the connection to the database
      * @param logger             the logger to use
      * @return the list of executed migrations
+     * @throws DatabaseException if the list cannot be read. Treating it as empty would run every
+     *                           migration again.
      */
     private static List<String> getMigrations(DatabaseConnection databaseConnection, Logger logger) {
         Schema schema = SchemaBuilder.select(migrationTableName);
@@ -215,8 +235,8 @@ public class MigrationManager {
             return schema.executeSelect(MigrationTable.class, databaseConnection, logger).stream().map(MigrationTable::getMigration).collect(Collectors.toList());
         } catch (Exception exception) {
             logger.info("Failed to get migrations list: " + exception.getMessage());
+            throw new DatabaseException("get-migrations", migrationTableName, exception);
         }
-        return new ArrayList<>();
     }
 
     /**

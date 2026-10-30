@@ -26,6 +26,7 @@ public class ColumnDefinition {
     private ColumnOperation operation = ColumnOperation.SET;
     private String expression;
     private List<Object> expressionParameters = Collections.emptyList();
+    private boolean updatedAtDefault;
 
     public ColumnDefinition(String name, String type) {
         this.name = name;
@@ -84,7 +85,9 @@ public class ColumnDefinition {
             columnSQL.append(" NOT NULL");
         }
 
-        if (defaultValue != null) {
+        if (updatedAtDefault) {
+            columnSQL.append(" DEFAULT ").append(dialect.updatedAtDefault());
+        } else if (defaultValue != null) {
             columnSQL.append(" DEFAULT ").append(defaultValue);
         }
 
@@ -144,6 +147,19 @@ public class ColumnDefinition {
 
     public void setDefaultValue(String defaultValue) {
         this.defaultValue = defaultValue;
+    }
+
+    public boolean isUpdatedAtDefault() {
+        return updatedAtDefault;
+    }
+
+    /**
+     * Uses the dialect's {@code updated_at} default (refreshed on update where the engine supports
+     * it) instead of {@link #getDefaultValue()}.
+     */
+    public ColumnDefinition setUpdatedAtDefault(boolean updatedAtDefault) {
+        this.updatedAtDefault = updatedAtDefault;
+        return this;
     }
 
     public boolean isPrimaryKey() {
