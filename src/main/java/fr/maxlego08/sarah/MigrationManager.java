@@ -85,6 +85,7 @@ public class MigrationManager {
 
         List<String> migrationsFromDatabase = getMigrations(databaseConnection, logger);
 
+        schemas.clear();
         MigrationManager.migrations.forEach(Migration::up);
 
         schemas.forEach(schema -> {
@@ -128,10 +129,17 @@ public class MigrationManager {
                     for (ColumnDefinition column : schema.getColumns()) {
                         Schema columnExistQuery;
                         long result;
-                        columnExistQuery = SchemaBuilder.selectCount("information_schema.COLUMNS")
-                                .where("TABLE_NAME", tableName)
-                                .where("TABLE_SCHEMA", databaseConnection.getDatabaseConfiguration().getDatabase())
-                                .where("COLUMN_NAME", column.getName());
+                        if (databaseConnection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.POSTGRESQL) {
+                            columnExistQuery = SchemaBuilder.selectCount("information_schema.columns")
+                                    .where("table_name", tableName)
+                                    .where("table_catalog", databaseConnection.getDatabaseConfiguration().getDatabase())
+                                    .where("column_name", column.getName());
+                        } else {
+                            columnExistQuery = SchemaBuilder.selectCount("information_schema.COLUMNS")
+                                    .where("TABLE_NAME", tableName)
+                                    .where("TABLE_SCHEMA", databaseConnection.getDatabaseConfiguration().getDatabase())
+                                    .where("COLUMN_NAME", column.getName());
+                        }
                         try {
                             result = columnExistQuery.executeSelectCount(databaseConnection, logger);
                         } catch (SQLException e) {

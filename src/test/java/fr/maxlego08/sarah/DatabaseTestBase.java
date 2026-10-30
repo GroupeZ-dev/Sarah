@@ -57,8 +57,15 @@ public abstract class DatabaseTestBase {
      * Create database configuration for tests
      */
     protected DatabaseConfiguration createConfiguration() {
-        // Default to SQLite for easier testing
-        return DatabaseConfiguration.sqlite(true);
+        // Default to SQLite for easier testing. Pass -Dsarah.test.type=POSTGRESQL (or MYSQL,
+        // MARIADB) plus sarah.test.host/port/user/password/database to run against a server.
+        String type = System.getProperty("sarah.test.type", "SQLITE");
+        if (type.equalsIgnoreCase("SQLITE")) {
+            return DatabaseConfiguration.sqlite(true);
+        }
+        return new DatabaseConfiguration("", System.getProperty("sarah.test.user", "sarah"), System.getProperty("sarah.test.password", "sarah"),
+                Integer.parseInt(System.getProperty("sarah.test.port", "5432")), System.getProperty("sarah.test.host", "localhost"),
+                System.getProperty("sarah.test.database", "sarah"), true, DatabaseType.valueOf(type.toUpperCase()));
     }
 
     /**
@@ -80,6 +87,8 @@ public abstract class DatabaseTestBase {
                 return new MySqlConnection(configuration, logger);
             case MARIADB:
                 return new MariaDbConnection(configuration, logger);
+            case POSTGRESQL:
+                return new PostgreSqlConnection(configuration, logger);
             default:
                 throw new IllegalArgumentException("Unsupported database type: " + type);
         }
@@ -105,12 +114,12 @@ public abstract class DatabaseTestBase {
                              "test_unique", "test_foreign", "test_referenced", "test_users_dto",
                              "test_complex", "test_profiles", "test_old_name", "test_new_name",
                              "test_parent", "test_child", "test_migration", "test_idempotent",
-                             "test_alter", "test_all_types", "test_nullable"};
+                             "test_alter", "test_all_types", "test_nullable", "test_counters", "test_pages"};
 
             for (String table : tables) {
                 try {
-                    if (configuration.getDatabaseType() == DatabaseType.SQLITE) {
-                        stmt.execute("DROP TABLE IF EXISTS " + table);
+                    if (configuration.getDatabaseType() == DatabaseType.POSTGRESQL) {
+                        stmt.execute("DROP TABLE IF EXISTS " + table + " CASCADE");
                     } else {
                         stmt.execute("DROP TABLE IF EXISTS " + table);
                     }

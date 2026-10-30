@@ -1,6 +1,8 @@
 package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.dialect.Dialect;
+import fr.maxlego08.sarah.dialect.Dialects;
 
 import java.util.Objects;
 
@@ -89,8 +91,27 @@ public class DatabaseConfiguration {
         return new DatabaseConfiguration("", null, null, 0, null, null, debug, DatabaseType.SQLITE);
     }
 
+    public static DatabaseConfiguration createPostgreSql(String user, String password, int port, String host, String database, boolean debug) {
+        return new DatabaseConfiguration("", user, password, port, host, database, debug, DatabaseType.POSTGRESQL);
+    }
+
     public String replacePrefix(String tableName) {
-        return this.tablePrefix == null ? tableName : tableName.replaceAll("%prefix%", this.tablePrefix);
+        return this.tablePrefix == null ? tableName : tableName.replace("%prefix%", this.tablePrefix);
+    }
+
+    /**
+     * Turns a statement built by Sarah into the one sent to the database: replaces
+     * {@code %prefix%} and lets the dialect rewrite identifier quoting.
+     *
+     * @param sql the statement, with MySQL-style backtick quoting
+     * @return the statement for the configured engine
+     */
+    public String prepare(String sql) {
+        return this.getDialect().translate(this.replacePrefix(sql));
+    }
+
+    public Dialect getDialect() {
+        return Dialects.of(this.databaseType);
     }
 
     public String getTablePrefix() {

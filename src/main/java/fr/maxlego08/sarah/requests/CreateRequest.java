@@ -3,7 +3,6 @@ package fr.maxlego08.sarah.requests;
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
-import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
@@ -35,8 +34,7 @@ public class CreateRequest implements Executor {
         for (ColumnDefinition column : this.schema.getColumns()) {
             columnSQLs.add(column.build(databaseConfiguration));
             // Check if this column has inline PRIMARY KEY (SQLite autoincrement)
-            if (column.isAutoIncrement() && column.isPrimaryKey() &&
-                databaseConfiguration.getDatabaseType() == fr.maxlego08.sarah.database.DatabaseType.SQLITE) {
+            if (column.isAutoIncrement() && column.isPrimaryKey() && databaseConfiguration.getDialect().inlineAutoIncrementPrimaryKey()) {
                 hasInlinePrimaryKey = true;
             }
         }
@@ -53,12 +51,9 @@ public class CreateRequest implements Executor {
 
         createTableSQL.append(")");
 
-        // Force InnoDB engine for MySQL/MariaDB to ensure foreign key support
-        if (databaseConfiguration.getDatabaseType() != DatabaseType.SQLITE) {
-            createTableSQL.append(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        }
+        createTableSQL.append(databaseConfiguration.getDialect().tableOptions());
 
-        String finalQuery = databaseConfiguration.replacePrefix(createTableSQL.toString());
+        String finalQuery = databaseConfiguration.prepare(createTableSQL.toString());
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }

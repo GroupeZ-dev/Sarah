@@ -1,6 +1,7 @@
 package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
+import fr.maxlego08.sarah.conditions.ColumnOperation;
 import fr.maxlego08.sarah.conditions.JoinCondition;
 import fr.maxlego08.sarah.conditions.SelectCondition;
 import fr.maxlego08.sarah.conditions.WhereCondition;
@@ -9,6 +10,7 @@ import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Migration;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.database.SchemaType;
+import fr.maxlego08.sarah.database.StatementBinder;
 import fr.maxlego08.sarah.exceptions.SarahException;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.AlterRequest;
@@ -63,6 +65,8 @@ public class SchemaBuilder implements Schema {
     private String orderBy;
     private Migration migration;
     private boolean isDistinct;
+    private Integer limit;
+    private Integer offset;
 
     private SchemaBuilder(String tableName, SchemaType schemaType) {
         this.tableName = tableName;
@@ -82,6 +86,8 @@ public class SchemaBuilder implements Schema {
         schema.migration = oldSchema.getMigration();
         schema.isDistinct = oldSchema.isDistinct();
         schema.newTableName = oldSchema.getNewTableName();
+        schema.limit = oldSchema.getLimit();
+        schema.offset = oldSchema.getOffset();
 
         return schema;
     }
@@ -423,11 +429,7 @@ public class SchemaBuilder implements Schema {
         ColumnDefinition column = new ColumnDefinition("updated_at", "TIMESTAMP");
 
         DatabaseConfiguration configuration = MigrationManager.getDatabaseConfiguration();
-        if (configuration.getDatabaseType() == DatabaseType.SQLITE) {
-            column.setDefaultValue("CURRENT_TIMESTAMP");
-        } else {
-            column.setDefaultValue("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-        }
+        column.setDefaultValue(configuration.getDialect().updatedAtDefault());
         this.columns.add(column);
         return this;
     }
@@ -474,6 +476,44 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema increment(String columnName, Number amount) {
+        return this.addColumn(new ColumnDefinition(columnName).setObject(amount).setOperation(ColumnOperation.INCREMENT));
+    }
+
+    @Override
+    public Schema expression(String columnName, String expression, Object... parameters) {
+        return this.addColumn(new ColumnDefinition(columnName).setExpression(expression, parameters));
+    }
+
+    @Override
+    public Schema insertOnly() {
+        getLastColumn().setOperation(ColumnOperation.INSERT_ONLY);
+        return this;
+    }
+
+    @Override
+    public Schema limit(int limit) {
+        this.limit = limit;
+        return this;
+    }
+
+    @Override
+    public Schema offset(int offset) {
+        this.offset = offset;
+        return this;
+    }
+
+    @Override
+    public Integer getLimit() {
+        return this.limit;
+    }
+
+    @Override
+    public Integer getOffset() {
+        return this.offset;
+    }
+
+    @Override
     public Schema timestamps() {
         this.createdAt();
         this.updatedAt();
@@ -506,7 +546,7 @@ public class SchemaBuilder implements Schema {
         StringBuilder selectQuery = new StringBuilder("SELECT COUNT(*) FROM " + tableName);
         this.whereConditions(selectQuery);
 
-        String finalQuery = databaseConnection.getDatabaseConfiguration().replacePrefix(selectQuery.toString());
+        String finalQuery = databaseConnection.getDatabaseConfiguration().prepare(selectQuery.toString());
         if (databaseConnection.getDatabaseConfiguration().isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }
@@ -559,7 +599,8 @@ public class SchemaBuilder implements Schema {
         }
 
         DatabaseConfiguration databaseConfiguration = databaseConnection.getDatabaseConfiguration();
-        String finalQuery = databaseConfiguration.replacePrefix(selectQuery.toString());
+        selectQuery.append(databaseConfiguration.getDialect().limitClause(this.limit, this.offset));
+        String finalQuery = databaseConfiguration.prepare(selectQuery.toString());
 
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
@@ -591,11 +632,11 @@ public class SchemaBuilder implements Schema {
     public void applyWhereConditions(PreparedStatement preparedStatement, int index) throws SQLException {
         for (WhereCondition condition : this.whereConditions) {
             if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
-                preparedStatement.setObject(index, condition.getValue());
+                StatementBinder.bind(preparedStatement, index, condition.getValue());
                 index += 1;
             } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN) {
                 for (String value : condition.getValues()) {
-                    preparedStatement.setObject(index, value);
+                    StatementBinder.bind(preparedStatement, index, value);
                     index += 1;
                 }
             }

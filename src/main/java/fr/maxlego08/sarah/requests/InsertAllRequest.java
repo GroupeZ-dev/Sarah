@@ -48,7 +48,7 @@ public class InsertAllRequest implements Executor {
         insertBuilder.append(" FROM ");
         insertBuilder.append(this.schema.getTableName());
 
-        String insertQuery = databaseConfiguration.replacePrefix(insertBuilder.toString());
+        String insertQuery = databaseConfiguration.prepare(insertBuilder.toString());
 
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + insertQuery);

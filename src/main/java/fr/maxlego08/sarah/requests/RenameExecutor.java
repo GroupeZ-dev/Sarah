@@ -27,7 +27,7 @@ public class RenameExecutor implements Executor {
         alterTableSQL.append(" RENAME TO ");
         alterTableSQL.append(this.schema.getNewTableName());
 
-        String finalQuery = databaseConfiguration.replacePrefix(alterTableSQL.toString());
+        String finalQuery = databaseConfiguration.prepare(alterTableSQL.toString());
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }

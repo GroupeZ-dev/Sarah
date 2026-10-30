@@ -24,7 +24,7 @@ public class DeleteRequest implements Executor {
         StringBuilder sql = new StringBuilder("DELETE FROM ").append(schemaBuilder.getTableName());
         schemaBuilder.whereConditions(sql);
 
-        String finalQuery = databaseConfiguration.replacePrefix(sql.toString());
+        String finalQuery = databaseConfiguration.prepare(sql.toString());
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }

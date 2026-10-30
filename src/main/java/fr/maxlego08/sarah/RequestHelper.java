@@ -2,12 +2,19 @@ package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.database.StatementBinder;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.InsertBatchRequest;
 import fr.maxlego08.sarah.requests.UpdateBatchRequest;
 import fr.maxlego08.sarah.requests.UpsertBatchRequest;
+import fr.maxlego08.sarah.transaction.BoundDatabaseConnection;
+import fr.maxlego08.sarah.transaction.Transaction;
+import fr.maxlego08.sarah.transaction.TransactionCallback;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,9 +41,10 @@ public class RequestHelper {
      * @param tableName the name of the table
      * @param clazz     the class template
      * @param data      the data to be inserted or updated
+     * @return the number of rows affected, as reported by the driver
      */
-    public <T> void upsert(String tableName, Class<T> clazz, T data) {
-        this.upsert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
+    public <T> int upsert(String tableName, Class<T> clazz, T data) {
+        return this.upsert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
     }
 
     /**
@@ -45,10 +53,12 @@ public class RequestHelper {
      *
      * @param tableName the name of the table
      * @param consumer  the consumer that defines the columns and values to be inserted or updated
+     * @return the number of rows affected, as reported by the driver (MySQL reports 2 for an
+     * updated row)
      */
-    public void upsert(String tableName, Consumer<Schema> consumer) {
+    public int upsert(String tableName, Consumer<Schema> consumer) {
         try {
-            SchemaBuilder.upsert(tableName, consumer).execute(this.connection, this.logger);
+            return SchemaBuilder.upsert(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
             this.logger.info("Upsert operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("upsert", tableName, exception);
@@ -61,10 +71,12 @@ public class RequestHelper {
      *
      * @param tableName the name of the table
      * @param consumer  the consumer that defines the columns and values to be updated
+     * @return the number of rows changed, which lets a conditional update (compare-and-set)
+     * know whether it won
      */
-    public void update(String tableName, Consumer<Schema> consumer) {
+    public int update(String tableName, Consumer<Schema> consumer) {
         try {
-            SchemaBuilder.update(tableName, consumer).execute(this.connection, this.logger);
+            return SchemaBuilder.update(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
             this.logger.info("Update operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("update", tableName, exception);
@@ -80,9 +92,10 @@ public class RequestHelper {
      * @param tableName the name of the table
      * @param clazz     the class template
      * @param data      the data to be inserted
+     * @return the generated key when the table has an auto-increment column, otherwise 0
      */
-    public <T> void insert(String tableName, Class<T> clazz, T data) {
-        this.insert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
+    public <T> int insert(String tableName, Class<T> clazz, T data) {
+        return this.insert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
     }
 
     /**
@@ -91,10 +104,15 @@ public class RequestHelper {
      *
      * @param tableName the name of the table
      * @param consumer  the consumer that defines the columns and values to be inserted
+     * @return the generated key when the table has an auto-increment column, otherwise 0
      */
-    public void insert(String tableName, Consumer<Schema> consumer) {
-        insert(tableName, consumer, id -> {
-        });
+    public int insert(String tableName, Consumer<Schema> consumer) {
+        try {
+            return SchemaBuilder.insert(tableName, consumer).execute(this.connection, this.logger);
+        } catch (SQLException exception) {
+            this.logger.info("Insert operation failed on table: " + tableName + " - " + exception.getMessage());
+            throw new DatabaseException("insert", tableName, exception);
+        }
     }
 
     /**
@@ -140,6 +158,8 @@ public class RequestHelper {
      * @param tableName the name of the table
      * @param consumer  the consumer that defines the columns and values to be used in the query
      * @return the result of the query as a long
+     * @throws DatabaseException if the query fails. A failure is never reported as 0 rows, so
+     *                           a caller cannot mistake an outage for an empty table.
      */
     public long count(String tableName, Consumer<Schema> consumer) {
         Schema schema = SchemaBuilder.selectCount(tableName);
@@ -148,8 +168,8 @@ public class RequestHelper {
             return schema.executeSelectCount(this.connection, this.logger);
         } catch (SQLException exception) {
             this.logger.info("Count operation failed on table: " + tableName + " - " + exception.getMessage());
+            throw new DatabaseException("count", tableName, exception);
         }
-        return 0L;
     }
 
     /**
@@ -161,6 +181,8 @@ public class RequestHelper {
      * @param clazz     the class type of the objects in the result list
      * @param consumer  the consumer that defines the columns and values to be used in the query
      * @return the result of the query as a list of objects of the given class type
+     * @throws DatabaseException if the query or the mapping fails. A failure is never reported
+     *                           as an empty list, so a caller cannot overwrite data it failed to read.
      */
     public <T> List<T> select(String tableName, Class<T> clazz, Consumer<Schema> consumer) {
         Schema schema = SchemaBuilder.select(tableName);
@@ -169,8 +191,8 @@ public class RequestHelper {
             return schema.executeSelect(clazz, this.connection, this.logger);
         } catch (Exception exception) {
             this.logger.info("Select operation failed on table: " + tableName + " - " + exception.getMessage());
+            throw new DatabaseException("select", tableName, exception);
         }
-        return new ArrayList<>();
     }
 
     /**
@@ -182,6 +204,7 @@ public class RequestHelper {
      * @param tableName the name of the table
      * @param consumer  the consumer that defines the columns and values to be used in the query
      * @return the result of the query as a list of maps
+     * @throws DatabaseException if the query fails
      */
     public List<Map<String, Object>> select(String tableName, Consumer<Schema> consumer) {
         Schema schema = SchemaBuilder.select(tableName);
@@ -190,8 +213,8 @@ public class RequestHelper {
             return schema.executeSelect(this.connection, this.logger);
         } catch (Exception exception) {
             this.logger.info("Select operation failed on table: " + tableName + " - " + exception.getMessage());
+            throw new DatabaseException("select", tableName, exception);
         }
-        return new ArrayList<>();
     }
 
     /**
@@ -201,6 +224,7 @@ public class RequestHelper {
      * @param tableName the name of the table
      * @param clazz     the class type of the objects in the result list
      * @return the result of the query as a list of objects of the given class type
+     * @throws DatabaseException if the query or the mapping fails
      */
     public <T> List<T> selectAll(String tableName, Class<T> clazz) {
         Schema schema = SchemaBuilder.select(tableName);
@@ -208,23 +232,23 @@ public class RequestHelper {
             return schema.executeSelect(clazz, this.connection, this.logger);
         } catch (Exception exception) {
             this.logger.info("SelectAll operation failed on table: " + tableName + " - " + exception.getMessage());
+            throw new DatabaseException("selectAll", tableName, exception);
         }
-        return new ArrayList<>();
     }
 
     /**
      * Deletes rows from the specified table using the given schema.
      * The schema builder should have a consumer that defines the columns and values to be used in the query.
-     * The result of the query is not returned.
      *
      * @param tableName the name of the table
      * @param consumer  the consumer that defines the columns and values to be used in the query
+     * @return the number of rows deleted
      */
-    public void delete(String tableName, Consumer<Schema> consumer) {
+    public int delete(String tableName, Consumer<Schema> consumer) {
         Schema schema = SchemaBuilder.delete(tableName);
         consumer.accept(schema);
         try {
-            schema.execute(this.connection, this.logger);
+            return schema.execute(this.connection, this.logger);
         } catch (SQLException exception) {
             this.logger.info("Delete operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("delete", tableName, exception);
@@ -239,10 +263,11 @@ public class RequestHelper {
      * updating existing rows based on primary key constraints.
      *
      * @param schemas a list of Schema objects representing the data to be upserted
+     * @return the number of rows affected, as reported by the driver
      */
-    public void upsertMultiple(List<Schema> schemas) {
+    public int upsertMultiple(List<Schema> schemas) {
         UpsertBatchRequest request = new UpsertBatchRequest(schemas);
-        request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
+        return request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
     }
 
     /**
@@ -254,14 +279,15 @@ public class RequestHelper {
      * @param clazz     the class type of the DTOs
      * @param dataList  a list of DTO objects to be upserted
      * @param <T>       the type of the DTO
+     * @return the number of rows affected, as reported by the driver
      */
-    public <T> void upsertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+    public <T> int upsertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
         List<Schema> schemas = new ArrayList<>();
         for (T data : dataList) {
             Schema schema = SchemaBuilder.upsert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
             schemas.add(schema);
         }
-        this.upsertMultiple(schemas);
+        return this.upsertMultiple(schemas);
     }
 
     /**
@@ -272,10 +298,12 @@ public class RequestHelper {
      * at once.
      *
      * @param schemas a list of Schema objects representing the data to be inserted
+     * @return the first generated key when the table has an auto-increment column, otherwise the
+     * number of inserted rows
      */
-    public void insertMultiple(List<Schema> schemas) {
+    public int insertMultiple(List<Schema> schemas) {
         InsertBatchRequest request = new InsertBatchRequest(schemas);
-        request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
+        return request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
     }
 
     /**
@@ -287,14 +315,16 @@ public class RequestHelper {
      * @param clazz     the class type of the DTOs
      * @param dataList  a list of DTO objects to be inserted
      * @param <T>       the type of the DTO
+     * @return the first generated key when the table has an auto-increment column, otherwise the
+     * number of inserted rows
      */
-    public <T> void insertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+    public <T> int insertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
         List<Schema> schemas = new ArrayList<>();
         for (T data : dataList) {
             Schema schema = SchemaBuilder.insert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
             schemas.add(schema);
         }
-        this.insertMultiple(schemas);
+        return this.insertMultiple(schemas);
     }
 
     /**
@@ -306,23 +336,25 @@ public class RequestHelper {
      * based on the specified schema definitions.
      *
      * @param schemas a list of Schema objects representing the data to be updated
+     * @return the total number of rows changed
      */
-    public void updateMultiple(List<Schema> schemas) {
+    public int updateMultiple(List<Schema> schemas) {
 
         if (this.connection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.SQLITE) {
+            int total = 0;
             for (Schema schema : schemas) {
                 try {
-                    schema.execute(this.connection, this.logger);
+                    total += schema.execute(this.connection, this.logger);
                 } catch (SQLException exception) {
                     this.logger.info("UpdateMultiple operation failed for schema: " + schema.getTableName() + " - " + exception.getMessage());
                     throw new DatabaseException("updateMultiple", schema.getTableName(), exception);
                 }
             }
-            return;
+            return total;
         }
 
         UpdateBatchRequest request = new UpdateBatchRequest(schemas);
-        request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
+        return request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
     }
 
     /**
@@ -337,14 +369,116 @@ public class RequestHelper {
      * @param clazz     the class type of the DTOs
      * @param dataList  a list of DTO objects to be updated
      * @param <T>       the type of the DTO
+     * @return the total number of rows changed
      */
-    public <T> void updateMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+    public <T> int updateMultiple(String tableName, Class<T> clazz, List<T> dataList) {
         List<Schema> schemas = new ArrayList<>();
         for (T data : dataList) {
             Schema schema = SchemaBuilder.update(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
             schemas.add(schema);
         }
-        this.updateMultiple(schemas);
+        return this.updateMultiple(schemas);
+    }
+
+    /**
+     * Runs a statement Sarah cannot build, such as {@code UPDATE … SET a = a + ? WHERE …} with
+     * several conditions on the same column. {@code %prefix%} is replaced and backtick-quoted
+     * identifiers are translated for the configured dialect.
+     *
+     * @param sql        the statement, with {@code ?} placeholders
+     * @param parameters the values bound to the placeholders
+     * @return the number of rows affected
+     */
+    public int execute(String sql, Object... parameters) {
+        DatabaseConfiguration configuration = this.connection.getDatabaseConfiguration();
+        String finalQuery = configuration.prepare(sql);
+        if (configuration.isDebug()) {
+            this.logger.info("Executing SQL: " + finalQuery);
+        }
+        try (Connection sqlConnection = this.connection.getConnection();
+             PreparedStatement preparedStatement = sqlConnection.prepareStatement(finalQuery)) {
+            bind(preparedStatement, parameters);
+            return preparedStatement.executeUpdate();
+        } catch (SQLException exception) {
+            this.logger.info("Raw statement failed: " + finalQuery + " - " + exception.getMessage());
+            throw new DatabaseException("execute", exception);
+        }
+    }
+
+    /**
+     * Runs a raw query and maps every row. {@code %prefix%} is replaced and backtick-quoted
+     * identifiers are translated for the configured dialect.
+     *
+     * @param sql        the query, with {@code ?} placeholders
+     * @param mapper     turns the current row into an object
+     * @param parameters the values bound to the placeholders
+     * @return one mapped object per row
+     */
+    public <T> List<T> query(String sql, RowMapper<T> mapper, Object... parameters) {
+        DatabaseConfiguration configuration = this.connection.getDatabaseConfiguration();
+        String finalQuery = configuration.prepare(sql);
+        if (configuration.isDebug()) {
+            this.logger.info("Executing SQL: " + finalQuery);
+        }
+        try (Connection sqlConnection = this.connection.getConnection();
+             PreparedStatement preparedStatement = sqlConnection.prepareStatement(finalQuery)) {
+            bind(preparedStatement, parameters);
+            List<T> results = new ArrayList<>();
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    results.add(mapper.map(resultSet));
+                }
+            }
+            return results;
+        } catch (SQLException exception) {
+            this.logger.info("Raw query failed: " + finalQuery + " - " + exception.getMessage());
+            throw new DatabaseException("query", exception);
+        }
+    }
+
+    /**
+     * Runs several operations on one connection, in one transaction.
+     *
+     * <p>The callback receives a helper bound to that connection: every call made through it
+     * is part of the transaction. It is committed when the callback returns and rolled back when
+     * it throws. Calls made through this helper, rather than the one given to the callback, run
+     * outside the transaction.</p>
+     *
+     * <pre>
+     * int changed = requestHelper.inTransaction(tx -&gt; {
+     *     tx.update("accounts", s -&gt; s.increment("balance", -10).where("id", from));
+     *     tx.update("accounts", s -&gt; s.increment("balance", 10).where("id", to));
+     *     return 2;
+     * });
+     * </pre>
+     *
+     * @param callback the operations to run
+     * @return what the callback returns
+     * @throws DatabaseException if the transaction cannot be started or committed, or wrapping
+     *                           what the callback threw
+     */
+    public <T> T inTransaction(TransactionCallback<T> callback) {
+        try (Transaction transaction = this.connection.beginTransaction()) {
+            BoundDatabaseConnection boundConnection = new BoundDatabaseConnection(this.connection.getDatabaseConfiguration(), this.logger, transaction.getConnection());
+            T result;
+            try {
+                result = callback.execute(new RequestHelper(boundConnection, this.logger));
+            } catch (RuntimeException exception) {
+                transaction.rollback();
+                throw exception;
+            } catch (Exception exception) {
+                transaction.rollback();
+                throw new DatabaseException("transaction", exception);
+            }
+            transaction.commit();
+            return result;
+        }
+    }
+
+    private void bind(PreparedStatement preparedStatement, Object... parameters) throws SQLException {
+        for (int index = 0; index < parameters.length; index++) {
+            StatementBinder.bind(preparedStatement, index + 1, parameters[index]);
+        }
     }
 
     /**

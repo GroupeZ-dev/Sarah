@@ -26,7 +26,7 @@ public class DropTableRequest implements Executor {
             return -1;
         }
 
-        String finalQuery = databaseConfiguration.replacePrefix("DROP TABLE IF EXISTS " + tableName);
+        String finalQuery = databaseConfiguration.prepare("DROP TABLE IF EXISTS " + tableName);
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }

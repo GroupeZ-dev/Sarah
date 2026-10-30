@@ -6,6 +6,7 @@ import fr.maxlego08.sarah.conditions.ColumnDefinition;
 import fr.maxlego08.sarah.conditions.JoinCondition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.database.StatementBinder;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -23,29 +24,31 @@ public class UpdateRequest implements Executor {
         this.schema = schema;
     }
 
+    static String buildQuery(Schema schema, List<Object> values) {
+        StringBuilder updateQuery = new StringBuilder("UPDATE " + schema.getTableName());
+
+        for (JoinCondition join : schema.getJoinConditions()) {
+            updateQuery.append(" ").append(join.getJoinClause());
+        }
+
+        List<String> assignments = new ArrayList<>();
+        for (ColumnDefinition columnDefinition : schema.getColumns()) {
+            assignments.add(columnDefinition.updateAssignment(values));
+        }
+        updateQuery.append(" SET ").append(String.join(", ", assignments));
+
+        schema.whereConditions(updateQuery);
+        return updateQuery.toString();
+    }
+
+    /**
+     * @return the number of rows changed
+     */
     @Override
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
 
-        StringBuilder updateQuery = new StringBuilder("UPDATE " + this.schema.getTableName());
-
-        if (!this.schema.getJoinConditions().isEmpty()) {
-            for (JoinCondition join : this.schema.getJoinConditions()) {
-                updateQuery.append(" ").append(join.getJoinClause());
-            }
-        }
-
-        updateQuery.append(" SET ");
-
         List<Object> values = new ArrayList<>();
-
-        for (int i = 0; i < this.schema.getColumns().size(); i++) {
-            ColumnDefinition columnDefinition = this.schema.getColumns().get(i);
-            updateQuery.append(i > 0 ? ", " : "").append(columnDefinition.getSafeName()).append(" = ?");
-            values.add(columnDefinition.getObject());
-        }
-
-        this.schema.whereConditions(updateQuery);
-        String updateSql = databaseConfiguration.replacePrefix(updateQuery.toString());
+        String updateSql = databaseConfiguration.prepare(buildQuery(this.schema, values));
 
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + updateSql);
@@ -53,10 +56,12 @@ public class UpdateRequest implements Executor {
 
         try (Connection connection = databaseConnection.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(updateSql)) {
+
             for (int i = 0; i < values.size(); i++) {
-                preparedStatement.setObject(i + 1, values.get(i));
+                StatementBinder.bind(preparedStatement, i + 1, values.get(i));
             }
             this.schema.applyWhereConditions(preparedStatement, values.size() + 1);
+
             // getUpdateCount() n'est PAS fiable apres executeUpdate() : le pilote SQLite
             // (org.xerial:sqlite-jdbc) rend 0 alors que executeUpdate() a bien rendu le nombre
             // de lignes modifiees. Toute ecriture compare-and-set batie sur ce compte rendu

@@ -3,9 +3,10 @@ package fr.maxlego08.sarah.requests;
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.DatabaseConnection;
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
-import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.database.StatementBinder;
+import fr.maxlego08.sarah.dialect.Dialect;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -23,100 +24,50 @@ public class UpsertRequest implements Executor {
         this.schema = schema;
     }
 
-    @Override
-    public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
-        DatabaseType databaseType = databaseConfiguration.getDatabaseType();
-        StringBuilder insertQuery = new StringBuilder("INSERT INTO " + this.schema.getTableName() + " (");
-        StringBuilder valuesQuery = new StringBuilder("VALUES (");
-        StringBuilder onUpdateQuery = new StringBuilder();
-
-        List<Object> insertValues = new ArrayList<>();
-        List<Object> updateValues = new ArrayList<>();
-
-        int insertIndex = 0;
-        int updateIndex = 0;
-        for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
-            // Skip auto-increment columns in INSERT part
-            if (!columnDefinition.isAutoIncrement()) {
-                insertQuery.append(insertIndex > 0 ? ", " : "").append(columnDefinition.getSafeName());
-                valuesQuery.append(insertIndex > 0 ? ", " : "").append("?");
-                insertValues.add(columnDefinition.getObject());
-                insertIndex++;
+    /**
+     * Builds the conflict part of an upsert: {@code ON CONFLICT (…) DO UPDATE SET …} or
+     * {@code ON DUPLICATE KEY UPDATE …}.
+     *
+     * @param schema     the schema that defines the columns
+     * @param dialect    the dialect of the statement
+     * @param parameters receives the parameters of the assignments, in order
+     * @param batch      whether the statement inserts several rows
+     */
+    static String conflictClause(Schema schema, Dialect dialect, List<Object> parameters, boolean batch) {
+        List<String> assignments = new ArrayList<>();
+        String firstInsertedColumn = null;
+        for (ColumnDefinition column : schema.getColumns()) {
+            if (column.isAutoIncrement()) {
+                continue;
             }
-
-            // Skip auto-increment columns in UPDATE part as well
-            if (!columnDefinition.isAutoIncrement()) {
-                if (updateIndex > 0) {
-                    onUpdateQuery.append(", ");
-                }
-                if (databaseType == DatabaseType.SQLITE) {
-                    onUpdateQuery.append(columnDefinition.getSafeName()).append(" = excluded.").append(columnDefinition.getSafeName());
-                } else {
-                    onUpdateQuery.append(columnDefinition.getSafeName()).append(" = ?");
-                    updateValues.add(columnDefinition.getObject());
-                }
-                updateIndex++;
+            if (firstInsertedColumn == null && column.isInsertedByUpsert()) {
+                firstInsertedColumn = column.getSafeName();
+            }
+            String assignment = column.conflictAssignment(dialect, schema.getTableName(), parameters, batch);
+            if (assignment != null) {
+                assignments.add(assignment);
             }
         }
 
-        insertQuery.append(") ");
-        valuesQuery.append(")");
-
-        String upsertQuery;
-
-        if (databaseType == DatabaseType.SQLITE) {
-            StringBuilder onConflictQuery = new StringBuilder(" ON CONFLICT (");
-            List<String> nonAutoIncrementPrimaryKeys = getNonAutoIncrementPrimaryKeys();
-
-            for (int i = 0; i < nonAutoIncrementPrimaryKeys.size(); i++) {
-                onConflictQuery.append(i > 0 ? ", " : "").append(nonAutoIncrementPrimaryKeys.get(i));
-            }
-            onConflictQuery.append(") DO UPDATE SET ");
-            upsertQuery = insertQuery + valuesQuery.toString() + onConflictQuery + onUpdateQuery;
-        } else {
-            onUpdateQuery.insert(0, " ON DUPLICATE KEY UPDATE ");
-            upsertQuery = insertQuery + valuesQuery.toString() + onUpdateQuery;
+        if (dialect.usesOnConflict()) {
+            String target = " ON CONFLICT (" + String.join(", ", conflictColumns(schema)) + ")";
+            return assignments.isEmpty() ? target + " DO NOTHING" : target + " DO UPDATE SET " + String.join(", ", assignments);
         }
 
-        String finalQuery = databaseConfiguration.replacePrefix(upsertQuery);
-        if (databaseConfiguration.isDebug()) {
-            logger.info("Executing SQL: " + finalQuery);
+        if (assignments.isEmpty()) {
+            return " ON DUPLICATE KEY UPDATE " + firstInsertedColumn + " = " + firstInsertedColumn;
         }
-
-        try (Connection connection = databaseConnection.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(finalQuery)) {
-
-            int index = 1;
-
-            // Setting values for INSERT part
-            for (Object value : insertValues) {
-                preparedStatement.setObject(index++, value);
-            }
-
-            // Setting values for UPDATE part (only if not SQLite, since SQLite uses "excluded" keyword)
-            if (databaseType != DatabaseType.SQLITE) {
-                for (Object value : updateValues) {
-                    preparedStatement.setObject(index++, value);
-                }
-            }
-            // getUpdateCount() n'est PAS fiable apres executeUpdate() : le pilote SQLite
-            // (org.xerial:sqlite-jdbc) rend 0 alors que executeUpdate() a bien rendu le nombre
-            // de lignes modifiees. Toute ecriture compare-and-set batie sur ce compte rendu
-            // croyait donc avoir perdu la course a chaque fois, sur toutes les bases SQLite.
-            return preparedStatement.executeUpdate();
-        } catch (SQLException exception) {
-            logger.info("Upsert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
-            throw new DatabaseException("upsert", this.schema.getTableName(), exception);
-        }
-
+        return " ON DUPLICATE KEY UPDATE " + String.join(", ", assignments);
     }
 
-    private List<String> getNonAutoIncrementPrimaryKeys() {
+    /**
+     * The columns an {@code ON CONFLICT} clause targets: the primary key without its
+     * auto-increment part, or the unique columns when there is no such key.
+     */
+    static List<String> conflictColumns(Schema schema) {
         List<String> conflictColumns = new ArrayList<>();
 
-        // First, try to find primary keys that are not auto-increment
-        List<String> primaryKeys = schema.getPrimaryKeys();
-        for (String primaryKey : primaryKeys) {
+        for (String primaryKey : schema.getPrimaryKeys()) {
             boolean isAutoIncrement = false;
             for (ColumnDefinition col : schema.getColumns()) {
                 if (col.getSafeName().equals(primaryKey) && col.isAutoIncrement()) {
@@ -129,20 +80,66 @@ public class UpsertRequest implements Executor {
             }
         }
 
-        // If no non-auto-increment primary keys exist, look for UNIQUE columns
         if (conflictColumns.isEmpty()) {
             for (ColumnDefinition col : schema.getColumns()) {
-                // Check if column is unique and not auto-increment
                 if (col.isUnique() && !col.isAutoIncrement()) {
                     conflictColumns.add(col.getSafeName());
                 }
             }
         }
 
-        // If still no conflict columns found, throw error
         if (conflictColumns.isEmpty()) {
-            throw new IllegalStateException("UPSERT requires at least one non-auto-increment primary key or unique constraint for SQLite");
+            throw new IllegalStateException("UPSERT requires at least one non-auto-increment primary key or unique constraint for SQLite and PostgreSQL");
         }
+
         return conflictColumns;
+    }
+
+    /**
+     * @return the number of rows affected, as reported by the driver. MySQL reports 1 for an
+     * inserted row and 2 for an updated one.
+     */
+    @Override
+    public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
+
+        Dialect dialect = databaseConfiguration.getDialect();
+
+        List<String> columns = new ArrayList<>();
+        List<String> placeholders = new ArrayList<>();
+        List<Object> values = new ArrayList<>();
+
+        for (ColumnDefinition columnDefinition : this.schema.getColumns()) {
+            if (columnDefinition.isInsertedByUpsert()) {
+                columns.add(columnDefinition.getSafeName());
+                placeholders.add(columnDefinition.insertPlaceholder(values));
+            }
+        }
+
+        String upsertQuery = "INSERT INTO " + this.schema.getTableName() + " (" + String.join(", ", columns) + ") VALUES (" + String.join(", ", placeholders) + ")"
+                + conflictClause(this.schema, dialect, values, false);
+
+        String finalQuery = databaseConfiguration.prepare(upsertQuery);
+
+        if (databaseConfiguration.isDebug()) {
+            logger.info("Executing SQL: " + finalQuery);
+        }
+
+        try (Connection connection = databaseConnection.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(finalQuery)) {
+
+            int index = 1;
+            for (Object value : values) {
+                StatementBinder.bind(preparedStatement, index++, value);
+            }
+
+            // getUpdateCount() n'est PAS fiable apres executeUpdate() : le pilote SQLite
+            // (org.xerial:sqlite-jdbc) rend 0 alors que executeUpdate() a bien rendu le nombre
+            // de lignes modifiees. Toute ecriture compare-and-set batie sur ce compte rendu
+            // croyait donc avoir perdu la course a chaque fois, sur toutes les bases SQLite.
+            return preparedStatement.executeUpdate();
+        } catch (SQLException exception) {
+            logger.info("Upsert operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            throw new DatabaseException("upsert", this.schema.getTableName(), exception);
+        }
     }
 }

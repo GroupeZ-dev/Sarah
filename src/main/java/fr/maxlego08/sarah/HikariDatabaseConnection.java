@@ -3,13 +3,13 @@ package fr.maxlego08.sarah;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.dialect.Dialect;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,18 +37,13 @@ public class HikariDatabaseConnection extends DatabaseConnection {
         HikariConfig config = new HikariConfig();
         config.setPoolName("sarah-" + POOL_COUNTER.getAndIncrement());
 
-        DatabaseType databaseType = databaseConfiguration.getDatabaseType();
-
-        // URL + Driver
-        final String jdbcUrl;
-        if (databaseType == DatabaseType.MARIADB) {
-            jdbcUrl = "jdbc:mariadb://" + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase() + "?allowMultiQueries=true";
-            config.setDriverClassName("org.mariadb.jdbc.Driver");
-        } else {
-            jdbcUrl = "jdbc:mysql://" + databaseConfiguration.getHost() + ":" + databaseConfiguration.getPort() + "/" + databaseConfiguration.getDatabase() + "?allowMultiQueries=true";
-            config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        Dialect dialect = databaseConfiguration.getDialect();
+        if (dialect.getType() == DatabaseType.SQLITE) {
+            throw new IllegalArgumentException("SQLite is not pooled, use SqliteConnection");
         }
-        config.setJdbcUrl(jdbcUrl);
+
+        config.setJdbcUrl(dialect.jdbcUrl(databaseConfiguration));
+        config.setDriverClassName(dialect.driverClassName());
 
         // Auth
         config.setUsername(databaseConfiguration.getUser());
@@ -79,28 +74,7 @@ public class HikariDatabaseConnection extends DatabaseConnection {
         config.setConnectionTimeout(CONNECTION_TIMEOUT);
         config.setLeakDetectionThreshold(LEAK_DETECTION_THRESHOLD);
 
-        Map<String, String> commonProps = new HashMap<>();
-        commonProps.put("useSSL", "false");
-        commonProps.put("useUnicode", "true");
-        commonProps.put("characterEncoding", "utf8");
-        commonProps.put("socketTimeout", String.valueOf(TimeUnit.SECONDS.toMillis(30)));
-
-        if (databaseType == DatabaseType.MYSQL) {
-            commonProps.put("cachePrepStmts", "true");
-            commonProps.put("prepStmtCacheSize", "250");
-            commonProps.put("prepStmtCacheSqlLimit", "2048");
-            commonProps.put("useServerPrepStmts", "true");
-            commonProps.put("useLocalSessionState", "true");
-            commonProps.put("rewriteBatchedStatements", "true");
-            commonProps.put("cacheResultSetMetadata", "true");
-            commonProps.put("cacheServerConfiguration", "true");
-            commonProps.put("elideSetAutoCommits", "true");
-            commonProps.put("maintainTimeStats", "false");
-            commonProps.put("alwaysSendSetIsolation", "false");
-            commonProps.put("cacheCallableStmts", "true");
-        }
-
-        for (Map.Entry<String, String> e : commonProps.entrySet()) {
+        for (Map.Entry<String, String> e : dialect.dataSourceProperties().entrySet()) {
             config.addDataSourceProperty(e.getKey(), e.getValue());
         }
 

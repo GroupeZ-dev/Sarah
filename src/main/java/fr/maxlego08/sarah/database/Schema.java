@@ -669,6 +669,69 @@ public interface Schema {
     boolean isDistinct();
 
     /**
+     * Limits the number of rows returned by a select.
+     *
+     * @param limit the maximum number of rows
+     * @return the current schema builder
+     */
+    Schema limit(int limit);
+
+    /**
+     * Skips rows at the start of a select, usually together with {@link #orderBy(String)} and
+     * {@link #limit(int)} to read a table page by page.
+     *
+     * @param offset the number of rows to skip
+     * @return the current schema builder
+     */
+    Schema offset(int offset);
+
+    /**
+     * @return the row limit, or null when there is none
+     */
+    Integer getLimit();
+
+    /**
+     * @return the number of rows skipped, or null when there is none
+     */
+    Integer getOffset();
+
+    /**
+     * Adds a value to a numeric column instead of replacing it.
+     *
+     * <p>An update writes {@code col = col + amount}. An upsert inserts {@code amount} into a new
+     * row and adds it to the existing value otherwise, in one atomic statement. An insert writes
+     * {@code amount} as is.</p>
+     *
+     * @param columnName the column
+     * @param amount     the amount to add, negative to subtract
+     * @return the current schema builder
+     */
+    Schema increment(String columnName, Number amount);
+
+    /**
+     * Assigns a raw SQL expression to a column, for example {@code version + 1} or
+     * {@code CURRENT_TIMESTAMP}. Identifiers in the expression should be quoted with backticks
+     * so they are translated for every dialect.
+     *
+     * <p>An update assigns it. An upsert only applies it when the row already exists and leaves
+     * the column out of a new row. An insert uses it as the inserted value.</p>
+     *
+     * @param columnName the column
+     * @param expression the SQL expression, with {@code ?} placeholders
+     * @param parameters the values bound to the placeholders
+     * @return the current schema builder
+     */
+    Schema expression(String columnName, String expression, Object... parameters);
+
+    /**
+     * Marks the last added value so an upsert writes it into a new row but keeps the existing
+     * value when the row already exists, for example a creation date.
+     *
+     * @return the current schema builder
+     */
+    Schema insertOnly();
+
+    /**
      * Adds a column to the SELECT clause of the SQL query.
      *
      * @param selectedColumn the name of the column to be selected

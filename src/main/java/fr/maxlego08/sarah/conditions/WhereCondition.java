@@ -39,6 +39,8 @@ public class WhereCondition {
         if (this.whereAction == WhereAction.IS_NOT_NULL) return this.column + " IS NOT NULL";
         if (this.whereAction == WhereAction.IS_NULL) return this.column + " IS NULL";
         if (this.whereAction == WhereAction.IN) {
+            // "IN ()" is only accepted by SQLite; an empty list matches nothing everywhere.
+            if (values.isEmpty()) return "1 = 0";
             return this.column + " IN (" + values.stream().map(id -> "?").collect(Collectors.joining(",")) + ")";
         }
         return this.column + " " + this.operator + " ?";
