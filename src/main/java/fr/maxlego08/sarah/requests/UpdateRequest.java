@@ -7,6 +7,7 @@ import fr.maxlego08.sarah.conditions.JoinCondition;
 import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.database.StatementBinder;
+import fr.maxlego08.sarah.dialect.Dialect;
 import fr.maxlego08.sarah.exceptions.DatabaseException;
 import fr.maxlego08.sarah.logger.Logger;
 
@@ -24,11 +25,11 @@ public class UpdateRequest implements Executor {
         this.schema = schema;
     }
 
-    static String buildQuery(Schema schema, List<Object> values) {
+    static String buildQuery(Schema schema, List<Object> values, Dialect dialect) {
         StringBuilder updateQuery = new StringBuilder("UPDATE " + schema.getTableName());
 
         for (JoinCondition join : schema.getJoinConditions()) {
-            updateQuery.append(" ").append(join.getJoinClause());
+            updateQuery.append(" ").append(join.getJoinClause(dialect));
         }
 
         List<String> assignments = new ArrayList<>();
@@ -48,7 +49,7 @@ public class UpdateRequest implements Executor {
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
 
         List<Object> values = new ArrayList<>();
-        String updateSql = databaseConfiguration.prepare(buildQuery(this.schema, values));
+        String updateSql = databaseConfiguration.prepare(buildQuery(this.schema, values, databaseConfiguration.getDialect()));
 
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + updateSql);

@@ -2,6 +2,7 @@ package fr.maxlego08.sarah.dialect;
 
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.security.SqlIdentifiers;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -85,6 +86,14 @@ public class MySqlDialect extends AbstractDialect {
         properties.put("useSSL", "false");
         properties.put("allowMultiQueries", "true");
         return properties;
+    }
+
+    /**
+     * MySQL and MariaDB read a backslash in a string as an escape character, so it is escaped too.
+     */
+    @Override
+    public String stringLiteral(String value) {
+        return SqlIdentifiers.stringLiteral(value, true);
     }
 
     protected Map<String, String> commonProperties() {

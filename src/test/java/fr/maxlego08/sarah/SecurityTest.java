@@ -93,6 +93,37 @@ public class SecurityTest extends DatabaseTestBase {
     }
 
     @Test
+    public void testJoinConditionBackslashCannotEndTheString() {
+        JoinCondition join = new JoinCondition(JoinCondition.JoinType.LEFT, "test_orders", "o", "user_id", "test_users", "id",
+                JoinCondition.and("o", "status", "\\' OR 1=1 -- "));
+        // MySQL reads a backslash as an escape, so it is escaped too and the quote stays inside the string
+        assertTrue(join.getJoinClause(Dialects.of(DatabaseType.MYSQL)).endsWith("o.status = '\\\\'' OR 1=1 -- '"));
+        assertTrue(join.getJoinClause(Dialects.of(DatabaseType.MARIADB)).endsWith("o.status = '\\\\'' OR 1=1 -- '"));
+        assertTrue(join.getJoinClause().endsWith("o.status = '\\\\'' OR 1=1 -- '"));
+        // PostgreSQL and SQLite do not, so the backslash is written once
+        assertTrue(join.getJoinClause(Dialects.of(DatabaseType.POSTGRESQL)).endsWith("o.status = '\\'' OR 1=1 -- '"));
+        assertTrue(join.getJoinClause(Dialects.of(DatabaseType.SQLITE)).endsWith("o.status = '\\'' OR 1=1 -- '"));
+    }
+
+    @Test
+    public void testHashCommentIsRejected() {
+        // MySQL and MariaDB read # as the start of a comment
+        assertThrows(IllegalArgumentException.class, () -> SchemaBuilder.select("test_users#"));
+        assertThrows(IllegalArgumentException.class, () -> SchemaBuilder.select("test_users").orderBy("age #"));
+        assertThrows(IllegalArgumentException.class, () -> SchemaBuilder.select("test_users").whereNull("age IS NULL OR 1=1 #"));
+        assertThrows(IllegalArgumentException.class, () -> SchemaBuilder.select("test_users").where("age", "=#", 1));
+        Schema coalesce = SchemaBuilder.select("test_users");
+        coalesce.addSelect(null, "age", "years", "0 #");
+        assertThrows(IllegalArgumentException.class, () -> coalesce.getSelectColumns().get(0).getSelectColumn());
+        // A string left open could be closed by a later part of the statement
+        assertThrows(IllegalArgumentException.class, () -> SchemaBuilder.select("test_users").orderBy("age, '"));
+
+        // Inside a quoted string, or a quoted column name, # is just a character
+        assertDoesNotThrow(() -> SchemaBuilder.select("test_users").orderBy("FIELD(username, '#1', 'it''s #2')"));
+        assertDoesNotThrow(() -> SchemaBuilder.select("test_users").where("tag#", 1));
+    }
+
+    @Test
     public void testPasswordIsNotPrinted() {
         DatabaseConfiguration configuration = DatabaseConfiguration.create("user", "s3cret", 3306, "localhost", "db");
         assertFalse(configuration.toString().contains("s3cret"));

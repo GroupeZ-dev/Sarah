@@ -587,7 +587,7 @@ public class SchemaBuilder implements Schema {
 
         if (!this.joinConditions.isEmpty()) {
             for (JoinCondition join : this.joinConditions) {
-                selectQuery.append(" ").append(join.getJoinClause());
+                selectQuery.append(" ").append(join.getJoinClause(databaseConnection.getDatabaseConfiguration().getDialect()));
             }
         }
 

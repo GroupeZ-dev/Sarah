@@ -3,6 +3,7 @@ package fr.maxlego08.sarah.dialect;
 import fr.maxlego08.sarah.DatabaseConfiguration;
 import fr.maxlego08.sarah.database.DatabaseType;
 import fr.maxlego08.sarah.database.Schema;
+import fr.maxlego08.sarah.security.SqlIdentifiers;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -105,5 +106,12 @@ public interface Dialect {
      */
     default Map<String, String> connectionProperties() {
         return new HashMap<>();
+    }
+
+    /**
+     * Writes a string as a single-quoted literal for this engine.
+     */
+    default String stringLiteral(String value) {
+        return SqlIdentifiers.stringLiteral(value, false);
     }
 }

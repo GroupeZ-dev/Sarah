@@ -1,5 +1,6 @@
 package fr.maxlego08.sarah.conditions;
 
+import fr.maxlego08.sarah.dialect.Dialect;
 import fr.maxlego08.sarah.security.SqlIdentifiers;
 
 public class JoinCondition {
@@ -33,6 +34,15 @@ public class JoinCondition {
      * If there is an additional condition, it is appended with an AND clause.
      */
     public String getJoinClause() {
+        return getJoinClause(null);
+    }
+
+    /**
+     * @param dialect the engine the clause is written for, which decides how the value of an
+     *                {@link #and(String, String, String)} condition is escaped, or {@code null} to
+     *                escape it in a way that is safe on every engine
+     */
+    public String getJoinClause(Dialect dialect) {
         StringBuilder joinClause = new StringBuilder();
         joinClause.append(this.joinType.getSql()).append(" ")
                 .append(SqlIdentifiers.reference(this.primaryTable)).append(" AS ").append(SqlIdentifiers.reference(this.primaryTableAlias))
@@ -40,14 +50,15 @@ public class JoinCondition {
                 .append(" = ").append(SqlIdentifiers.reference(this.foreignTable)).append(".").append(SqlIdentifiers.reference(this.foreignColumn));
 
         if (this.additionalCondition != null) {
-            joinClause.append(" AND ").append(this.additionalCondition.getCondition());
+            joinClause.append(" AND ").append(this.additionalCondition.getCondition(dialect));
         }
         return joinClause.toString();
     }
 
-    private String getCondition() {
+    private String getCondition(Dialect dialect) {
         // foreignColumn holds the value compared to here, written as a string literal
-        return SqlIdentifiers.reference(this.primaryTableAlias) + "." + SqlIdentifiers.reference(this.primaryColumn) + " = " + SqlIdentifiers.stringLiteral(this.foreignColumn);
+        String value = dialect == null ? SqlIdentifiers.stringLiteral(this.foreignColumn) : dialect.stringLiteral(this.foreignColumn);
+        return SqlIdentifiers.reference(this.primaryTableAlias) + "." + SqlIdentifiers.reference(this.primaryColumn) + " = " + value;
     }
 
     public enum JoinType {

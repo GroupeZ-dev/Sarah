@@ -18,8 +18,9 @@ public final class SqlIdentifiers {
     private static final String[] FORBIDDEN = {";", "--", "/*", "*/", "\0"};
     /**
      * An operator made only of comparison symbols, such as {@code =}, {@code <=>} or {@code !~*}.
+     * {@code #} is left out: MySQL and MariaDB read it as the start of a comment.
      */
-    private static final Pattern SYMBOL_OPERATOR = Pattern.compile("[=<>!~*&|^@#%?+-]+");
+    private static final Pattern SYMBOL_OPERATOR = Pattern.compile("[=<>!~*&|^@%?+-]+");
     private static final Set<String> OPERATOR_KEYWORDS = new HashSet<>(Arrays.asList(
             "NOT", "LIKE", "ILIKE", "RLIKE", "REGEXP", "GLOB", "MATCH", "IS", "DISTINCT", "FROM", "SIMILAR", "TO", "IN"));
 
@@ -51,7 +52,7 @@ public final class SqlIdentifiers {
         if (name != null && name.indexOf('\'') >= 0) {
             throw new IllegalArgumentException("Invalid name: " + name);
         }
-        return check(name, "name");
+        return checkUnquoted(check(name, "name"), "name");
     }
 
     /**
@@ -61,7 +62,7 @@ public final class SqlIdentifiers {
      * @return the expression, unchanged
      */
     public static String expression(String expression) {
-        return check(expression, "expression");
+        return checkUnquoted(check(expression, "expression"), "expression");
     }
 
     /**
@@ -92,14 +93,58 @@ public final class SqlIdentifiers {
      * @return the value as text, unchanged
      */
     public static String literal(Object value) {
-        return check(String.valueOf(value), "literal");
+        return checkUnquoted(check(String.valueOf(value), "literal"), "literal");
+    }
+
+    /**
+     * Writes a string as a single-quoted literal that is safe on every engine: quotes are doubled
+     * and backslashes escaped, since MySQL and MariaDB read a backslash as an escape character.
+     * Elsewhere a backslash in the value is then compared as two, so prefer
+     * {@link #stringLiteral(String, boolean)} when the engine is known.
+     */
+    public static String stringLiteral(String value) {
+        return stringLiteral(value, true);
     }
 
     /**
      * Writes a string as a single-quoted literal.
+     *
+     * @param backslashEscapes whether the engine reads a backslash in a string as an escape
+     *                         character, as MySQL and MariaDB do by default
      */
-    public static String stringLiteral(String value) {
-        return "'" + value.replace("'", "''") + "'";
+    public static String stringLiteral(String value, boolean backslashEscapes) {
+        String escaped = backslashEscapes ? value.replace("\\", "\\\\") : value;
+        return "'" + escaped.replace("'", "''") + "'";
+    }
+
+    /**
+     * Rejects a {@code #} outside a quoted string, where MySQL and MariaDB start a comment, and a
+     * string left open, which a later part of the statement could close.
+     */
+    private static String checkUnquoted(String fragment, String kind) {
+        boolean inString = false;
+        for (int i = 0; i < fragment.length(); i++) {
+            char c = fragment.charAt(i);
+            if (inString) {
+                if (c == '\\') {
+                    i++;
+                } else if (c == '\'') {
+                    if (i + 1 < fragment.length() && fragment.charAt(i + 1) == '\'') {
+                        i++;
+                    } else {
+                        inString = false;
+                    }
+                }
+            } else if (c == '\'') {
+                inString = true;
+            } else if (c == '#') {
+                throw new IllegalArgumentException("Invalid " + kind + ": " + fragment);
+            }
+        }
+        if (inString) {
+            throw new IllegalArgumentException("Unterminated string in " + kind + ": " + fragment);
+        }
+        return fragment;
     }
 
     private static String check(String fragment, String kind) {

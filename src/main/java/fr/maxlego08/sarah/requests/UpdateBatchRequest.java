@@ -40,7 +40,7 @@ public class UpdateBatchRequest implements Executor {
         if (schemas.isEmpty()) return 0;
 
         Schema firstSchema = schemas.get(0);
-        String updateSql = databaseConfiguration.prepare(UpdateRequest.buildQuery(firstSchema, new ArrayList<>()));
+        String updateSql = databaseConfiguration.prepare(UpdateRequest.buildQuery(firstSchema, new ArrayList<>(), databaseConfiguration.getDialect()));
 
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL Batch: " + updateSql);
