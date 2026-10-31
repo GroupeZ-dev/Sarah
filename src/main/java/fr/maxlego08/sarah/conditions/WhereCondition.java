@@ -14,6 +14,8 @@ public class WhereCondition {
     private final WhereAction whereAction;
 
     private final List<Object> values = new ArrayList<>();
+    private final List<WhereCondition> group = new ArrayList<>();
+    private boolean or;
 
     public WhereCondition(String prefix, String column, String operator, Object value) {
         this.column = qualify(prefix, column);
@@ -45,6 +47,38 @@ public class WhereCondition {
         this.whereAction = whereAction;
     }
 
+    /**
+     * A group of conditions, written between parentheses.
+     */
+    public WhereCondition(List<WhereCondition> conditions) {
+        if (conditions.isEmpty()) {
+            throw new IllegalArgumentException("A group needs at least one condition");
+        }
+        this.column = null;
+        this.value = null;
+        this.operator = null;
+        this.group.addAll(conditions);
+        this.whereAction = WhereAction.GROUP;
+    }
+
+    /**
+     * Writes conditions one after the other, each joined to the previous one with {@code AND},
+     * or {@code OR} when it is marked so. The first condition's own joiner is ignored.
+     *
+     * @param conditions the conditions to write
+     * @return the conditions, without the {@code WHERE} keyword
+     */
+    public static String join(List<WhereCondition> conditions) {
+        StringBuilder sql = new StringBuilder();
+        for (WhereCondition condition : conditions) {
+            if (sql.length() > 0) {
+                sql.append(condition.isOr() ? " OR " : " AND ");
+            }
+            sql.append(condition.getCondition());
+        }
+        return sql.toString();
+    }
+
     public WhereCondition(String column, WhereAction whereAction) {
         // Written as is, as it always was, so a qualified name such as t.col keeps working
         this.column = SqlIdentifiers.reference(column);
@@ -58,6 +92,7 @@ public class WhereCondition {
     }
 
     public String getCondition() {
+        if (this.whereAction == WhereAction.GROUP) return "(" + join(this.group) + ")";
         if (this.whereAction == WhereAction.IS_NOT_NULL) return this.column + " IS NOT NULL";
         if (this.whereAction == WhereAction.IS_NULL) return this.column + " IS NULL";
         if (this.whereAction == WhereAction.IN) {
@@ -77,6 +112,28 @@ public class WhereCondition {
 
     private String placeholders() {
         return values.stream().map(id -> "?").collect(Collectors.joining(","));
+    }
+
+    /**
+     * @return true when this condition is joined to the previous one with {@code OR}
+     */
+    public boolean isOr() {
+        return this.or;
+    }
+
+    /**
+     * @param or true to join this condition to the previous one with {@code OR} rather than
+     *           {@code AND}
+     */
+    public void setOr(boolean or) {
+        this.or = or;
+    }
+
+    /**
+     * @return the conditions of a group, empty for any other condition
+     */
+    public List<WhereCondition> getGroup() {
+        return this.group;
     }
 
     public String getOperator() {
@@ -111,7 +168,7 @@ public class WhereCondition {
     }
 
     public enum WhereAction {
-        IS_NOT_NULL, IS_NULL, NORMAL, IN, NOT_IN, BETWEEN, NOT_BETWEEN,
+        IS_NOT_NULL, IS_NULL, NORMAL, IN, NOT_IN, BETWEEN, NOT_BETWEEN, GROUP,
     }
 }
 

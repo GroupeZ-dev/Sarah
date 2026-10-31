@@ -13,6 +13,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Represents a schema builder for database operations.
@@ -501,6 +502,119 @@ public interface Schema {
      */
     default Schema whereNotLike(String columnName, String pattern) {
         return this.where(columnName, "NOT LIKE", pattern);
+    }
+
+    /**
+     * Adds a group of conditions between parentheses, joined to the previous conditions with
+     * {@code AND}. Only the {@code where} calls made on the schema given to the consumer are used.
+     *
+     * <pre>
+     * // WHERE `active` = ? AND (`role` = ? OR `role` = ?)
+     * schema.where("active", true).where(group -&gt; group.where("role", "admin").orWhere("role", "owner"));
+     * </pre>
+     *
+     * <p>A group without conditions adds nothing.</p>
+     *
+     * @param group the consumer that adds the conditions of the group
+     * @return this schema
+     */
+    default Schema where(Consumer<Schema> group) {
+        throw new UnsupportedOperationException("where is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a group of conditions between parentheses, joined to the previous conditions with
+     * {@code OR}. A group without conditions adds nothing.
+     *
+     * @param group the consumer that adds the conditions of the group
+     * @return this schema
+     */
+    default Schema orWhere(Consumer<Schema> group) {
+        throw new UnsupportedOperationException("orWhere is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds an equality condition joined to the previous one with {@code OR}.
+     *
+     * <p>As in SQL, {@code AND} is applied before {@code OR}: {@code where(a).where(b).orWhere(c)}
+     * matches {@code (a AND b) OR c}. Use {@link #where(Consumer)} to group conditions
+     * otherwise.</p>
+     *
+     * @param columnName the column to compare
+     * @param value      the value the column must be equal to
+     * @return this schema
+     */
+    default Schema orWhere(String columnName, Object value) {
+        throw new UnsupportedOperationException("orWhere is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to compare
+     * @param operator   the comparison operator, such as {@code >} or {@code LIKE}
+     * @param value      the value to compare with
+     * @return this schema
+     */
+    default Schema orWhere(String columnName, String operator, Object value) {
+        throw new UnsupportedOperationException("orWhere is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a condition on a column of the given table, joined to the previous one with
+     * {@code OR}.
+     *
+     * @param tablePrefix the table or alias the column belongs to, or null
+     * @param columnName  the column to compare
+     * @param operator    the comparison operator, such as {@code >} or {@code LIKE}
+     * @param value       the value to compare with
+     * @return this schema
+     */
+    default Schema orWhere(String tablePrefix, String columnName, String operator, Object value) {
+        throw new UnsupportedOperationException("orWhere is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds an {@code IS NULL} condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to check
+     * @return this schema
+     */
+    default Schema orWhereNull(String columnName) {
+        throw new UnsupportedOperationException("orWhereNull is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds an {@code IS NOT NULL} condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to check
+     * @return this schema
+     */
+    default Schema orWhereNotNull(String columnName) {
+        throw new UnsupportedOperationException("orWhereNotNull is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds an {@code IN} condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to compare
+     * @param objects    the values the column may be equal to
+     * @return this schema
+     */
+    default Schema orWhereIn(String columnName, Object... objects) {
+        throw new UnsupportedOperationException("orWhereIn is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code BETWEEN} condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to compare
+     * @param from       the lower bound
+     * @param to         the upper bound
+     * @return this schema
+     */
+    default Schema orWhereBetween(String columnName, Object from, Object to) {
+        throw new UnsupportedOperationException("orWhereBetween is not supported by " + getClass().getName());
     }
 
     /**

@@ -250,6 +250,73 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema where(Consumer<Schema> group) {
+        return this.addGroup(group, false);
+    }
+
+    @Override
+    public Schema orWhere(Consumer<Schema> group) {
+        return this.addGroup(group, true);
+    }
+
+    private Schema addGroup(Consumer<Schema> consumer, boolean or) {
+        SchemaBuilder group = new SchemaBuilder(this.tableName, SchemaType.SELECT);
+        consumer.accept(group);
+        // An empty group adds nothing, rather than a condition that matches every row
+        if (!group.whereConditions.isEmpty()) {
+            WhereCondition condition = new WhereCondition(group.whereConditions);
+            condition.setOr(or);
+            this.whereConditions.add(condition);
+        }
+        return this;
+    }
+
+    @Override
+    public Schema orWhere(String columnName, Object value) {
+        return this.orWhere(null, columnName, "=", value);
+    }
+
+    @Override
+    public Schema orWhere(String columnName, String operator, Object value) {
+        return this.orWhere(null, columnName, operator, value);
+    }
+
+    @Override
+    public Schema orWhere(String tablePrefix, String columnName, String operator, Object value) {
+        this.where(tablePrefix, columnName, operator, value);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema orWhereNull(String columnName) {
+        this.whereNull(columnName);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema orWhereNotNull(String columnName) {
+        this.whereNotNull(columnName);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema orWhereIn(String columnName, Object... objects) {
+        this.whereIn(columnName, objects);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema orWhereBetween(String columnName, Object from, Object to) {
+        this.whereBetween(columnName, from, to);
+        return this.markLastOr();
+    }
+
+    private Schema markLastOr() {
+        this.whereConditions.get(this.whereConditions.size() - 1).setOr(true);
+        return this;
+    }
+
+    @Override
     public Schema whereNotIn(String columnName, Object... objects) {
         return this.whereNotIn(null, columnName, Arrays.asList(objects));
     }
@@ -555,11 +622,7 @@ public class SchemaBuilder implements Schema {
     @Override
     public void whereConditions(StringBuilder sql) {
         if (!this.whereConditions.isEmpty()) {
-            List<String> conditions = new ArrayList<>();
-            for (WhereCondition condition : this.whereConditions) {
-                conditions.add(condition.getCondition());
-            }
-            sql.append(" WHERE ").append(String.join(" AND ", conditions));
+            sql.append(" WHERE ").append(WhereCondition.join(this.whereConditions));
         }
     }
 
@@ -658,9 +721,19 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void applyWhereConditions(PreparedStatement preparedStatement, int index) throws SQLException {
-        Boolean typedInValues = null;
-        for (WhereCondition condition : this.whereConditions) {
-            if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
+        // The driver is only asked which engine it is when IN values need it, as before
+        boolean typedInValues = hasInCondition(this.whereConditions) && isPostgreSql(preparedStatement);
+        bindWhereConditions(preparedStatement, index, this.whereConditions, typedInValues);
+    }
+
+    /**
+     * @return the index of the next parameter
+     */
+    private static int bindWhereConditions(PreparedStatement preparedStatement, int index, List<WhereCondition> conditions, boolean typedInValues) throws SQLException {
+        for (WhereCondition condition : conditions) {
+            if (condition.getWhereAction() == WhereCondition.WhereAction.GROUP) {
+                index = bindWhereConditions(preparedStatement, index, condition.getGroup(), typedInValues);
+            } else if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
                 StatementBinder.bind(preparedStatement, index, condition.getValue());
                 index += 1;
             } else if (condition.getWhereAction() == WhereCondition.WhereAction.BETWEEN
@@ -672,9 +745,6 @@ public class SchemaBuilder implements Schema {
                 }
             } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN
                     || condition.getWhereAction() == WhereCondition.WhereAction.NOT_IN) {
-                if (typedInValues == null) {
-                    typedInValues = isPostgreSql(preparedStatement);
-                }
                 // IN values have always been sent as strings, which MySQL, MariaDB and SQLite compare
                 // as before. PostgreSQL refuses a number column compared to text, so it gets the values' types.
                 List<?> values = typedInValues ? condition.getParameters() : condition.getValues();
@@ -684,6 +754,18 @@ public class SchemaBuilder implements Schema {
                 }
             }
         }
+        return index;
+    }
+
+    private static boolean hasInCondition(List<WhereCondition> conditions) {
+        for (WhereCondition condition : conditions) {
+            WhereCondition.WhereAction action = condition.getWhereAction();
+            if (action == WhereCondition.WhereAction.IN || action == WhereCondition.WhereAction.NOT_IN
+                    || (action == WhereCondition.WhereAction.GROUP && hasInCondition(condition.getGroup()))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isPostgreSql(PreparedStatement preparedStatement) throws SQLException {
