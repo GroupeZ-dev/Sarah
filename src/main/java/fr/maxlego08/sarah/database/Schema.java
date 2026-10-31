@@ -9,6 +9,7 @@ import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -725,6 +726,63 @@ public interface Schema {
      * @throws SQLException if a database access error occurs or the query execution fails
      */
     long executeSelectCount(DatabaseConnection databaseConnection, Logger logger) throws SQLException;
+
+    /**
+     * Runs {@code SELECT function(column)} with the conditions and joins of this schema.
+     *
+     * @param function one of {@code SUM}, {@code MAX}, {@code MIN} or {@code AVG}
+     * @param columnName the column to aggregate
+     * @return the value as returned by the driver, or null when no row matches
+     */
+    default Object executeSelectAggregate(String function, String columnName, DatabaseConnection databaseConnection, Logger logger) throws SQLException {
+        throw new UnsupportedOperationException("executeSelectAggregate is not supported by " + getClass().getName());
+    }
+
+    /**
+     * @return whether at least one row matches the conditions of this schema
+     */
+    default boolean executeExists(DatabaseConnection databaseConnection, Logger logger) throws SQLException {
+        throw new UnsupportedOperationException("executeExists is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Groups the rows of a select by the given columns. Each column is written as is, like an
+     * {@code ORDER BY} column, so {@code t.column} works.
+     *
+     * @param columns the columns to group by
+     * @return this schema
+     */
+    default Schema groupBy(String... columns) {
+        throw new UnsupportedOperationException("groupBy is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code HAVING} condition, which filters the groups of a select. The expression is
+     * written as is, for example {@code COUNT(*)} or {@code SUM(`amount`)}; the value is bound.
+     * Several conditions are joined with {@code AND}.
+     *
+     * @param expression the expression to compare
+     * @param operator   the comparison operator, such as {@code >=}
+     * @param value      the value to compare with
+     * @return this schema
+     */
+    default Schema having(String expression, String operator, Object value) {
+        throw new UnsupportedOperationException("having is not supported by " + getClass().getName());
+    }
+
+    /**
+     * @return the {@code GROUP BY} columns, as written in the statement
+     */
+    default List<String> getGroupBy() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * @return the {@code HAVING} conditions
+     */
+    default List<WhereCondition> getHavingConditions() {
+        return Collections.emptyList();
+    }
 
     /**
      * Executes a SELECT query on the specified database connection and retrieves the results.

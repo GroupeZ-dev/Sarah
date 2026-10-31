@@ -47,6 +47,26 @@ public class WhereCondition {
         this.whereAction = whereAction;
     }
 
+    private WhereCondition(String expression, String operator, Object value) {
+        this.column = expression;
+        this.operator = SqlIdentifiers.operator(operator);
+        this.value = value;
+        this.whereAction = WhereAction.NORMAL;
+    }
+
+    /**
+     * A condition on an expression written as is, such as {@code COUNT(*)} or
+     * {@code SUM(`amount`)} in a {@code HAVING} clause.
+     *
+     * @param expression the expression to compare, checked like an {@code ORDER BY} clause
+     * @param operator   the comparison operator
+     * @param value      the value bound to the placeholder
+     * @return the condition
+     */
+    public static WhereCondition expression(String expression, String operator, Object value) {
+        return new WhereCondition(SqlIdentifiers.expression(expression), operator, value);
+    }
+
     /**
      * A group of conditions, written between parentheses.
      */

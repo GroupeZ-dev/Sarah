@@ -64,6 +64,8 @@ public class SchemaBuilder implements Schema {
     private final List<WhereCondition> whereConditions = new ArrayList<>();
     private final List<JoinCondition> joinConditions = new ArrayList<>();
     private final List<SelectCondition> selectColumns = new ArrayList<>();
+    private final List<String> groupBy = new ArrayList<>();
+    private final List<WhereCondition> havingConditions = new ArrayList<>();
     private String newTableName;
     private String orderBy;
     private Migration migration;
@@ -91,6 +93,8 @@ public class SchemaBuilder implements Schema {
         schema.newTableName = oldSchema.getNewTableName();
         schema.limit = oldSchema.getLimit();
         schema.offset = oldSchema.getOffset();
+        schema.groupBy.addAll(oldSchema.getGroupBy());
+        schema.havingConditions.addAll(oldSchema.getHavingConditions());
 
         return schema;
     }
@@ -309,6 +313,39 @@ public class SchemaBuilder implements Schema {
     public Schema orWhereBetween(String columnName, Object from, Object to) {
         this.whereBetween(columnName, from, to);
         return this.markLastOr();
+    }
+
+    @Override
+    public Schema groupBy(String... columns) {
+        for (String column : columns) {
+            this.groupBy.add(SqlIdentifiers.expression(column));
+        }
+        return this;
+    }
+
+    @Override
+    public Schema having(String expression, String operator, Object value) {
+        this.havingConditions.add(WhereCondition.expression(expression, operator, value));
+        return this;
+    }
+
+    @Override
+    public List<String> getGroupBy() {
+        return this.groupBy;
+    }
+
+    @Override
+    public List<WhereCondition> getHavingConditions() {
+        return this.havingConditions;
+    }
+
+    private void groupByAndHaving(StringBuilder sql) {
+        if (!this.groupBy.isEmpty()) {
+            sql.append(" GROUP BY ").append(String.join(", ", this.groupBy));
+        }
+        if (!this.havingConditions.isEmpty()) {
+            sql.append(" HAVING ").append(WhereCondition.join(this.havingConditions));
+        }
     }
 
     private Schema markLastOr() {
@@ -627,6 +664,48 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Object executeSelectAggregate(String function, String columnName, DatabaseConnection databaseConnection, Logger logger) throws SQLException {
+        String aggregate = function.toUpperCase(Locale.ROOT);
+        if (!aggregate.equals("SUM") && !aggregate.equals("MAX") && !aggregate.equals("MIN") && !aggregate.equals("AVG")) {
+            throw new IllegalArgumentException("Unsupported aggregate function: " + function);
+        }
+        return this.executeScalar(aggregate + "(" + SqlIdentifiers.quote(columnName) + ")", null, databaseConnection, logger, "aggregate");
+    }
+
+    @Override
+    public boolean executeExists(DatabaseConnection databaseConnection, Logger logger) throws SQLException {
+        return this.executeScalar("1", 1, databaseConnection, logger, "exists") != null;
+    }
+
+    private Object executeScalar(String selected, Integer limit, DatabaseConnection databaseConnection, Logger logger, String operation) throws SQLException {
+        DatabaseConfiguration databaseConfiguration = databaseConnection.getDatabaseConfiguration();
+        StringBuilder selectQuery = new StringBuilder("SELECT " + selected + " FROM " + this.tableName);
+        for (JoinCondition join : this.joinConditions) {
+            selectQuery.append(" ").append(join.getJoinClause(databaseConfiguration.getDialect()));
+        }
+        this.whereConditions(selectQuery);
+        selectQuery.append(databaseConfiguration.getDialect().limitClause(limit, null));
+
+        String finalQuery = databaseConfiguration.prepare(selectQuery.toString());
+        if (databaseConfiguration.isDebug()) {
+            logger.info("Executing SQL: " + finalQuery);
+        }
+
+        try (Connection connection = databaseConnection.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(finalQuery)) {
+
+            applyWhereConditions(preparedStatement, 1);
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                return resultSet.next() ? resultSet.getObject(1) : null;
+            }
+        } catch (SQLException exception) {
+            logger.error("Failed to execute schema select " + operation + ": " + exception.getMessage());
+            throw new SQLException("Failed to execute schema select " + operation + ": " + exception.getMessage(), exception);
+        }
+    }
+
+    @Override
     public long executeSelectCount(DatabaseConnection databaseConnection, Logger logger) throws SQLException {
         StringBuilder selectQuery = new StringBuilder("SELECT COUNT(*) FROM " + tableName);
         this.whereConditions(selectQuery);
@@ -678,6 +757,7 @@ public class SchemaBuilder implements Schema {
         }
 
         this.whereConditions(selectQuery);
+        this.groupByAndHaving(selectQuery);
 
         if (this.orderBy != null) {
             selectQuery.append(" ").append(this.orderBy);
@@ -723,7 +803,9 @@ public class SchemaBuilder implements Schema {
     public void applyWhereConditions(PreparedStatement preparedStatement, int index) throws SQLException {
         // The driver is only asked which engine it is when IN values need it, as before
         boolean typedInValues = hasInCondition(this.whereConditions) && isPostgreSql(preparedStatement);
-        bindWhereConditions(preparedStatement, index, this.whereConditions, typedInValues);
+        index = bindWhereConditions(preparedStatement, index, this.whereConditions, typedInValues);
+        // HAVING comes after WHERE in the statement; it is empty for anything but a grouped select
+        bindWhereConditions(preparedStatement, index, this.havingConditions, typedInValues);
     }
 
     /**

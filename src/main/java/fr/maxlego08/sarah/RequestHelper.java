@@ -12,12 +12,14 @@ import fr.maxlego08.sarah.transaction.BoundDatabaseConnection;
 import fr.maxlego08.sarah.transaction.Transaction;
 import fr.maxlego08.sarah.transaction.TransactionCallback;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -277,6 +279,96 @@ public class RequestHelper {
                 throw new DatabaseException("count", tableName, exception);
             }
             return 0L;
+        }
+    }
+
+    /**
+     * Returns the sum of a column over the matching rows.
+     *
+     * @param tableName  the name of the table
+     * @param columnName the column to add up
+     * @param consumer   the consumer that defines the conditions
+     * @return the sum, with the type the driver returns, or null when no row matches or when the
+     * query fails and strict reads are off
+     * @throws DatabaseException if the query fails and strict reads are on
+     */
+    public Number sum(String tableName, String columnName, Consumer<Schema> consumer) {
+        return this.aggregate("SUM", tableName, columnName, consumer);
+    }
+
+    /**
+     * Returns the largest value of a column over the matching rows.
+     *
+     * @return the value, or null when no row matches or when the query fails and strict reads are
+     * off
+     * @see #sum(String, String, Consumer)
+     */
+    public Number max(String tableName, String columnName, Consumer<Schema> consumer) {
+        return this.aggregate("MAX", tableName, columnName, consumer);
+    }
+
+    /**
+     * Returns the smallest value of a column over the matching rows.
+     *
+     * @return the value, or null when no row matches or when the query fails and strict reads are
+     * off
+     * @see #sum(String, String, Consumer)
+     */
+    public Number min(String tableName, String columnName, Consumer<Schema> consumer) {
+        return this.aggregate("MIN", tableName, columnName, consumer);
+    }
+
+    /**
+     * Returns the average of a column over the matching rows.
+     *
+     * @return the average, or null when no row matches or when the query fails and strict reads
+     * are off
+     * @see #sum(String, String, Consumer)
+     */
+    public Number avg(String tableName, String columnName, Consumer<Schema> consumer) {
+        return this.aggregate("AVG", tableName, columnName, consumer);
+    }
+
+    private Number aggregate(String function, String tableName, String columnName, Consumer<Schema> consumer) {
+        Schema schema = SchemaBuilder.select(tableName);
+        consumer.accept(schema);
+        Object value;
+        try {
+            value = schema.executeSelectAggregate(function, columnName, this.connection, this.logger);
+        } catch (SQLException exception) {
+            this.logger.error(function + " operation failed on table: " + tableName + " - " + exception.getMessage());
+            if (this.strictReads) {
+                throw new DatabaseException(function.toLowerCase(Locale.ROOT), tableName, exception);
+            }
+            return null;
+        }
+        if (value == null || value instanceof Number) {
+            return (Number) value;
+        }
+        // SQLite can return a MAX or MIN over a text column as a string
+        return new BigDecimal(value.toString());
+    }
+
+    /**
+     * Tells whether at least one row matches, without reading the rows.
+     *
+     * @param tableName the name of the table
+     * @param consumer  the consumer that defines the conditions
+     * @return true when a row matches; false when none does, or when the query fails and strict
+     * reads are off
+     * @throws DatabaseException if the query fails and strict reads are on
+     */
+    public boolean exists(String tableName, Consumer<Schema> consumer) {
+        Schema schema = SchemaBuilder.select(tableName);
+        consumer.accept(schema);
+        try {
+            return schema.executeExists(this.connection, this.logger);
+        } catch (SQLException exception) {
+            this.logger.error("Exists operation failed on table: " + tableName + " - " + exception.getMessage());
+            if (this.strictReads) {
+                throw new DatabaseException("exists", tableName, exception);
+            }
+            return false;
         }
     }
 
