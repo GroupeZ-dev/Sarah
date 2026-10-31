@@ -114,7 +114,7 @@ public abstract class DatabaseTestBase {
                              "test_unique", "test_foreign", "test_referenced", "test_users_dto",
                              "test_complex", "test_profiles", "test_old_name", "test_new_name",
                              "test_parent", "test_child", "test_migration", "test_idempotent",
-                             "test_alter", "test_all_types", "test_nullable", "test_counters", "test_pages", "test_members", "test_sales"};
+                             "test_alter", "test_all_types", "test_nullable", "test_counters", "test_pages", "test_members", "test_sales", "test_async"};
 
             for (String table : tables) {
                 try {
