@@ -41,6 +41,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -831,7 +832,13 @@ public class SchemaBuilder implements Schema {
                 // as before. PostgreSQL refuses a number column compared to text, so it gets the values' types.
                 List<?> values = typedInValues ? condition.getParameters() : condition.getValues();
                 for (Object value : values) {
-                    StatementBinder.bind(preparedStatement, index, value);
+                    if (typedInValues && value instanceof String) {
+                        // whereIn(column, List<String>) only takes strings: sent untyped, PostgreSQL
+                        // reads "30" as a number for an integer column and as text for a text one
+                        preparedStatement.setObject(index, value, Types.OTHER);
+                    } else {
+                        StatementBinder.bind(preparedStatement, index, value);
+                    }
                     index += 1;
                 }
             }

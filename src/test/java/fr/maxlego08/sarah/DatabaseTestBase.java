@@ -105,8 +105,8 @@ public abstract class DatabaseTestBase {
      * Clean up all test tables
      */
     protected void cleanupDatabase() throws SQLException {
-        Connection conn = connection.getConnection();
-        try (Statement stmt = conn.createStatement()) {
+        try (Connection conn = connection.getConnection();
+             Statement stmt = conn.createStatement()) {
             // Drop common test tables
             String[] tables = {"test_users", "test_products", "test_orders", "test_composite",
                              "test_autoincrement", "migrations", "test_join_a", "test_join_b",
