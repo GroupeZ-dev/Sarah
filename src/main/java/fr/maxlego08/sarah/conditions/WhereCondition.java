@@ -30,6 +30,21 @@ public class WhereCondition {
         this.whereAction = WhereAction.IN;
     }
 
+    /**
+     * A condition on a list of values: {@code IN}, {@code NOT IN}, {@code BETWEEN} or
+     * {@code NOT BETWEEN} (the last two take exactly two values).
+     */
+    public WhereCondition(String prefix, String column, WhereAction whereAction, List<?> values) {
+        if ((whereAction == WhereAction.BETWEEN || whereAction == WhereAction.NOT_BETWEEN) && values.size() != 2) {
+            throw new IllegalArgumentException(whereAction + " needs exactly two values");
+        }
+        this.column = qualify(prefix, column);
+        this.value = null;
+        this.operator = null;
+        this.values.addAll(values);
+        this.whereAction = whereAction;
+    }
+
     public WhereCondition(String column, WhereAction whereAction) {
         // Written as is, as it always was, so a qualified name such as t.col keeps working
         this.column = SqlIdentifiers.reference(column);
@@ -48,9 +63,20 @@ public class WhereCondition {
         if (this.whereAction == WhereAction.IN) {
             // "IN ()" is only accepted by SQLite; an empty list matches nothing everywhere.
             if (values.isEmpty()) return "1 = 0";
-            return this.column + " IN (" + values.stream().map(id -> "?").collect(Collectors.joining(",")) + ")";
+            return this.column + " IN (" + placeholders() + ")";
         }
+        if (this.whereAction == WhereAction.NOT_IN) {
+            // The opposite of an empty IN: nothing is excluded
+            if (values.isEmpty()) return "1 = 1";
+            return this.column + " NOT IN (" + placeholders() + ")";
+        }
+        if (this.whereAction == WhereAction.BETWEEN) return this.column + " BETWEEN ? AND ?";
+        if (this.whereAction == WhereAction.NOT_BETWEEN) return this.column + " NOT BETWEEN ? AND ?";
         return this.column + " " + this.operator + " ?";
+    }
+
+    private String placeholders() {
+        return values.stream().map(id -> "?").collect(Collectors.joining(","));
     }
 
     public String getOperator() {
@@ -70,21 +96,22 @@ public class WhereCondition {
     }
 
     /**
-     * @return the values of an {@code IN} condition, as strings
+     * @return the values of an {@code IN}, {@code NOT IN} or {@code BETWEEN} condition, as strings
      */
     public List<String> getValues() {
         return values.stream().map(String::valueOf).collect(Collectors.toList());
     }
 
     /**
-     * @return the values of an {@code IN} condition, with their own type, as they are bound
+     * @return the values of an {@code IN}, {@code NOT IN} or {@code BETWEEN} condition, with their
+     * own type, as they are bound
      */
     public List<Object> getParameters() {
         return values;
     }
 
     public enum WhereAction {
-        IS_NOT_NULL, IS_NULL, NORMAL, IN,
+        IS_NOT_NULL, IS_NULL, NORMAL, IN, NOT_IN, BETWEEN, NOT_BETWEEN,
     }
 }
 

@@ -250,6 +250,29 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema whereNotIn(String columnName, Object... objects) {
+        return this.whereNotIn(null, columnName, Arrays.asList(objects));
+    }
+
+    @Override
+    public Schema whereNotIn(String tablePrefix, String columnName, List<?> values) {
+        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, WhereCondition.WhereAction.NOT_IN, values));
+        return this;
+    }
+
+    @Override
+    public Schema whereBetween(String columnName, Object from, Object to) {
+        this.whereConditions.add(new WhereCondition(null, columnName, WhereCondition.WhereAction.BETWEEN, Arrays.asList(from, to)));
+        return this;
+    }
+
+    @Override
+    public Schema whereNotBetween(String columnName, Object from, Object to) {
+        this.whereConditions.add(new WhereCondition(null, columnName, WhereCondition.WhereAction.NOT_BETWEEN, Arrays.asList(from, to)));
+        return this;
+    }
+
+    @Override
     public Schema uuid(String columnName) {
         this.string(columnName, 36);
         return this;
@@ -640,7 +663,15 @@ public class SchemaBuilder implements Schema {
             if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
                 StatementBinder.bind(preparedStatement, index, condition.getValue());
                 index += 1;
-            } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN) {
+            } else if (condition.getWhereAction() == WhereCondition.WhereAction.BETWEEN
+                    || condition.getWhereAction() == WhereCondition.WhereAction.NOT_BETWEEN) {
+                // New conditions, so their bounds keep their type on every engine
+                for (Object value : condition.getParameters()) {
+                    StatementBinder.bind(preparedStatement, index, value);
+                    index += 1;
+                }
+            } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN
+                    || condition.getWhereAction() == WhereCondition.WhereAction.NOT_IN) {
                 if (typedInValues == null) {
                     typedInValues = isPostgreSql(preparedStatement);
                 }

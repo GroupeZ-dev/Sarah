@@ -434,6 +434,76 @@ public interface Schema {
     Schema whereIn(String tablePrefix, String columnName, List<String> strings);
 
     /**
+     * Adds a {@code NOT IN} condition. An empty list matches every row.
+     *
+     * @param columnName the column to compare
+     * @param objects    the values the column must not be equal to
+     * @return this schema
+     */
+    default Schema whereNotIn(String columnName, Object... objects) {
+        throw new UnsupportedOperationException("whereNotIn is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code NOT IN} condition on a column of the given table. An empty list matches every
+     * row.
+     *
+     * @param tablePrefix the table or alias the column belongs to, or null
+     * @param columnName  the column to compare
+     * @param values      the values the column must not be equal to
+     * @return this schema
+     */
+    default Schema whereNotIn(String tablePrefix, String columnName, List<?> values) {
+        throw new UnsupportedOperationException("whereNotIn is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code BETWEEN} condition. Both bounds are included.
+     *
+     * @param columnName the column to compare
+     * @param from       the lower bound
+     * @param to         the upper bound
+     * @return this schema
+     */
+    default Schema whereBetween(String columnName, Object from, Object to) {
+        throw new UnsupportedOperationException("whereBetween is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code NOT BETWEEN} condition, matching values outside both bounds.
+     *
+     * @param columnName the column to compare
+     * @param from       the lower bound
+     * @param to         the upper bound
+     * @return this schema
+     */
+    default Schema whereNotBetween(String columnName, Object from, Object to) {
+        throw new UnsupportedOperationException("whereNotBetween is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code LIKE} condition, same as {@code where(columnName, "LIKE", pattern)}.
+     *
+     * @param columnName the column to compare
+     * @param pattern    the pattern, with {@code %} and {@code _} wildcards
+     * @return this schema
+     */
+    default Schema whereLike(String columnName, String pattern) {
+        return this.where(columnName, "LIKE", pattern);
+    }
+
+    /**
+     * Adds a {@code NOT LIKE} condition, same as {@code where(columnName, "NOT LIKE", pattern)}.
+     *
+     * @param columnName the column to compare
+     * @param pattern    the pattern, with {@code %} and {@code _} wildcards
+     * @return this schema
+     */
+    default Schema whereNotLike(String columnName, String pattern) {
+        return this.where(columnName, "NOT LIKE", pattern);
+    }
+
+    /**
      * Adds a LEFT JOIN to the query.
      * The join is of the format: {@code primaryTable LEFT JOIN foreignTable ON primaryTable.primaryColumn = foreignTable.foreignColumn}.
      * The {@code primaryColumnAlias} is an optional alias for the primary column.

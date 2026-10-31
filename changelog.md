@@ -15,6 +15,7 @@
   * insert: writes the amount as is.
 * **Expressions.** `Schema#expression(column, sql, params...)` assigns raw SQL to a column, for example `` `version` + 1 `` or `CURRENT_TIMESTAMP`. On an upsert it only applies when the row already exists.
 * **Insert-only columns.** `Schema#insertOnly()` keeps the existing value of the last column when an upsert finds the row, for example a creation date. An upsert where every column is insert-only does nothing on conflict.
+* **More conditions.** `Schema#whereNotIn`, `#whereBetween`, `#whereNotBetween`, `#whereLike` and `#whereNotLike`, on selects, counts, updates and deletes. `BETWEEN` includes both bounds, and its bounds keep their type on every engine. `whereNotIn` with an empty list matches every row. They are `default` methods of `Schema`, so an existing implementation of the interface still compiles.
 * **Paging.** `Schema#limit(int)` and `Schema#offset(int)` on selects, with the right syntax for each engine (an offset alone works too).
 * **Raw SQL.** `RequestHelper#execute(sql, params...)` returns the number of rows changed, and `RequestHelper#query(sql, RowMapper, params...)` maps each row. Both replace `%prefix%` and adapt quoting for the engine.
 * **Transactions.** `RequestHelper#inTransaction(tx -> ...)` runs several operations on one connection. It commits when the callback returns and rolls back when it throws. Only calls made through `tx` are part of the transaction.
