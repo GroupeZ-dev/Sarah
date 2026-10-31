@@ -145,9 +145,19 @@ public class RawQueryAndTransactionTest extends DatabaseTestBase {
     }
 
     @Test
-    public void testSelectOnMissingTableThrows() {
+    public void testSelectOnMissingTableReturnsEmptyByDefault() {
+        assertTrue(requestHelper.select("test_missing_table", schema -> {
+        }).isEmpty());
+        assertEquals(0, requestHelper.count("test_missing_table", schema -> {
+        }));
+    }
+
+    @Test
+    public void testSelectOnMissingTableThrowsWithStrictReads() {
+        requestHelper.setStrictReads(true);
         assertThrows(DatabaseException.class, () -> requestHelper.select("test_missing_table", schema -> {
         }));
+        assertThrows(DatabaseException.class, () -> requestHelper.selectAll("test_missing_table", Object.class));
         assertThrows(DatabaseException.class, () -> requestHelper.count("test_missing_table", schema -> {
         }));
     }
@@ -156,7 +166,7 @@ public class RawQueryAndTransactionTest extends DatabaseTestBase {
     public void testConnectionIsReleasedAfterTransactions() {
         for (int index = 0; index < 50; index++) {
             int position = index;
-            requestHelper.inTransaction(tx -> tx.insert("test_pages", schema -> {
+            requestHelper.inTransaction(tx -> tx.insertAndGetKey("test_pages", schema -> {
                 schema.object("position", position);
                 schema.string("name", "row");
             }));

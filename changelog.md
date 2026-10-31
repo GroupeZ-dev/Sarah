@@ -25,8 +25,10 @@
 
 ### Changes
 
-* `RequestHelper#update`, `#delete`, `#upsert`, `#upsertMultiple` and `#updateMultiple` return the number of rows affected instead of `void`. A conditional update (`where("version", n)`) can tell whether it won. `#insert` and `#insertMultiple` return the generated key (0 when the table has no auto-increment column). Callers must be recompiled.
-* **Breaking:** `RequestHelper#select`, `#selectAll` and `#count` now throw `DatabaseException` when the query fails. They used to log the error and return an empty list or 0, which a caller could mistake for "no data" and then overwrite.
+* `RequestHelper#update`, `#delete`, `#upsert`, `#insert`, `#upsertMultiple`, `#insertMultiple` and `#updateMultiple` keep their `void` signatures, so plugins compiled against an older version keep working. New methods return the result:
+  * `#updateAndCount`, `#deleteAndCount`, `#upsertAndCount`, `#upsertMultipleAndCount` and `#updateMultipleAndCount` return the number of rows affected. A conditional update (`where("version", n)`) can tell whether it won.
+  * `#insertAndGetKey` and `#insertMultipleAndGetKey` return the generated key (0 when the table has no auto-increment column).
+* **Strict reads (opt-in).** `RequestHelper#setStrictReads(true)` makes `#select`, `#selectAll` and `#count` throw `DatabaseException` when the query fails. By default they still log the error and return an empty list or 0, as before. A helper given to `inTransaction` inherits the setting.
 * Parameters are bound the same way on every driver: `java.util.Date` is sent as a `Timestamp`, `UUID` and enums as strings.
 * An insert no longer fails after writing its row when the driver cannot report generated keys for the table.
 * Names and operators written into statements are checked, so they cannot carry SQL of their own. Only what no legitimate value contains is rejected, with an `IllegalArgumentException`: a statement separator (`;`), a comment (`--`, `/*`, or `#` outside a quoted string, which MySQL and MariaDB read as a comment), a string left open, a quote ending a quoted column name, or a `where` operator that is neither comparison symbols nor keywords such as `LIKE`, `NOT LIKE`, `REGEXP` or `IS NOT`. `orderBy`, table names, prefixes and aliases are otherwise written as before.

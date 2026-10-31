@@ -26,10 +26,115 @@ public class RequestHelper {
 
     private final DatabaseConnection connection;
     private final Logger logger;
+    private boolean strictReads;
 
     public RequestHelper(DatabaseConnection connection, Logger logger) {
         this.connection = connection;
         this.logger = logger;
+    }
+
+    /**
+     * Makes {@link #select}, {@link #selectAll} and {@link #count} throw a
+     * {@link DatabaseException} when the query fails. By default they log the error and return
+     * an empty list or 0, which a caller cannot tell apart from "no data".
+     *
+     * @param strictReads true to throw on failed reads
+     * @return this helper
+     */
+    public RequestHelper setStrictReads(boolean strictReads) {
+        this.strictReads = strictReads;
+        return this;
+    }
+
+    /**
+     * @return whether failed reads throw instead of returning an empty result
+     */
+    public boolean isStrictReads() {
+        return this.strictReads;
+    }
+
+    /**
+     * Same as {@link #upsertAndCount(String, Class, Object)}, without the row count.
+     */
+    public <T> void upsert(String tableName, Class<T> clazz, T data) {
+        this.upsertAndCount(tableName, clazz, data);
+    }
+
+    /**
+     * Same as {@link #upsertAndCount(String, Consumer)}, without the row count.
+     */
+    public void upsert(String tableName, Consumer<Schema> consumer) {
+        this.upsertAndCount(tableName, consumer);
+    }
+
+    /**
+     * Same as {@link #updateAndCount(String, Consumer)}, without the row count.
+     */
+    public void update(String tableName, Consumer<Schema> consumer) {
+        this.updateAndCount(tableName, consumer);
+    }
+
+    /**
+     * Same as {@link #insertAndGetKey(String, Class, Object)}, without the generated key.
+     */
+    public <T> void insert(String tableName, Class<T> clazz, T data) {
+        this.insertAndGetKey(tableName, clazz, data);
+    }
+
+    /**
+     * Same as {@link #insertAndGetKey(String, Consumer)}, without the generated key.
+     */
+    public void insert(String tableName, Consumer<Schema> consumer) {
+        this.insertAndGetKey(tableName, consumer);
+    }
+
+    /**
+     * Same as {@link #deleteAndCount(String, Consumer)}, without the row count.
+     */
+    public void delete(String tableName, Consumer<Schema> consumer) {
+        this.deleteAndCount(tableName, consumer);
+    }
+
+    /**
+     * Same as {@link #upsertMultipleAndCount(List)}, without the row count.
+     */
+    public void upsertMultiple(List<Schema> schemas) {
+        this.upsertMultipleAndCount(schemas);
+    }
+
+    /**
+     * Same as {@link #upsertMultipleAndCount(String, Class, List)}, without the row count.
+     */
+    public <T> void upsertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+        this.upsertMultipleAndCount(tableName, clazz, dataList);
+    }
+
+    /**
+     * Same as {@link #insertMultipleAndGetKey(List)}, without the generated key.
+     */
+    public void insertMultiple(List<Schema> schemas) {
+        this.insertMultipleAndGetKey(schemas);
+    }
+
+    /**
+     * Same as {@link #insertMultipleAndGetKey(String, Class, List)}, without the generated key.
+     */
+    public <T> void insertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+        this.insertMultipleAndGetKey(tableName, clazz, dataList);
+    }
+
+    /**
+     * Same as {@link #updateMultipleAndCount(List)}, without the row count.
+     */
+    public void updateMultiple(List<Schema> schemas) {
+        this.updateMultipleAndCount(schemas);
+    }
+
+    /**
+     * Same as {@link #updateMultipleAndCount(String, Class, List)}, without the row count.
+     */
+    public <T> void updateMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+        this.updateMultipleAndCount(tableName, clazz, dataList);
     }
 
     /**
@@ -43,8 +148,8 @@ public class RequestHelper {
      * @param data      the data to be inserted or updated
      * @return the number of rows affected, as reported by the driver
      */
-    public <T> int upsert(String tableName, Class<T> clazz, T data) {
-        return this.upsert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
+    public <T> int upsertAndCount(String tableName, Class<T> clazz, T data) {
+        return this.upsertAndCount(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
     }
 
     /**
@@ -56,7 +161,7 @@ public class RequestHelper {
      * @return the number of rows affected, as reported by the driver (MySQL reports 2 for an
      * updated row)
      */
-    public int upsert(String tableName, Consumer<Schema> consumer) {
+    public int upsertAndCount(String tableName, Consumer<Schema> consumer) {
         try {
             return SchemaBuilder.upsert(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
@@ -74,7 +179,7 @@ public class RequestHelper {
      * @return the number of rows changed, which lets a conditional update (compare-and-set)
      * know whether it won
      */
-    public int update(String tableName, Consumer<Schema> consumer) {
+    public int updateAndCount(String tableName, Consumer<Schema> consumer) {
         try {
             return SchemaBuilder.update(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
@@ -94,8 +199,8 @@ public class RequestHelper {
      * @param data      the data to be inserted
      * @return the generated key when the table has an auto-increment column, otherwise 0
      */
-    public <T> int insert(String tableName, Class<T> clazz, T data) {
-        return this.insert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
+    public <T> int insertAndGetKey(String tableName, Class<T> clazz, T data) {
+        return this.insertAndGetKey(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
     }
 
     /**
@@ -106,7 +211,7 @@ public class RequestHelper {
      * @param consumer  the consumer that defines the columns and values to be inserted
      * @return the generated key when the table has an auto-increment column, otherwise 0
      */
-    public int insert(String tableName, Consumer<Schema> consumer) {
+    public int insertAndGetKey(String tableName, Consumer<Schema> consumer) {
         try {
             return SchemaBuilder.insert(tableName, consumer).execute(this.connection, this.logger);
         } catch (SQLException exception) {
@@ -158,8 +263,8 @@ public class RequestHelper {
      * @param tableName the name of the table
      * @param consumer  the consumer that defines the columns and values to be used in the query
      * @return the result of the query as a long
-     * @throws DatabaseException if the query fails. A failure is never reported as 0 rows, so
-     *                           a caller cannot mistake an outage for an empty table.
+     * @throws DatabaseException if the query fails and {@link #setStrictReads(boolean) strict
+     *                           reads} are on. Otherwise a failure is logged and 0 is returned.
      */
     public long count(String tableName, Consumer<Schema> consumer) {
         Schema schema = SchemaBuilder.selectCount(tableName);
@@ -168,7 +273,10 @@ public class RequestHelper {
             return schema.executeSelectCount(this.connection, this.logger);
         } catch (SQLException exception) {
             this.logger.error("Count operation failed on table: " + tableName + " - " + exception.getMessage());
-            throw new DatabaseException("count", tableName, exception);
+            if (this.strictReads) {
+                throw new DatabaseException("count", tableName, exception);
+            }
+            return 0L;
         }
     }
 
@@ -181,8 +289,9 @@ public class RequestHelper {
      * @param clazz     the class type of the objects in the result list
      * @param consumer  the consumer that defines the columns and values to be used in the query
      * @return the result of the query as a list of objects of the given class type
-     * @throws DatabaseException if the query or the mapping fails. A failure is never reported
-     *                           as an empty list, so a caller cannot overwrite data it failed to read.
+     * @throws DatabaseException if the query or the mapping fails and {@link #setStrictReads(boolean)
+     *                           strict reads} are on. Otherwise a failure is logged and an empty
+     *                           list is returned.
      */
     public <T> List<T> select(String tableName, Class<T> clazz, Consumer<Schema> consumer) {
         Schema schema = SchemaBuilder.select(tableName);
@@ -191,7 +300,10 @@ public class RequestHelper {
             return schema.executeSelect(clazz, this.connection, this.logger);
         } catch (Exception exception) {
             this.logger.error("Select operation failed on table: " + tableName + " - " + exception.getMessage());
-            throw new DatabaseException("select", tableName, exception);
+            if (this.strictReads) {
+                throw new DatabaseException("select", tableName, exception);
+            }
+            return new ArrayList<>();
         }
     }
 
@@ -204,7 +316,7 @@ public class RequestHelper {
      * @param tableName the name of the table
      * @param consumer  the consumer that defines the columns and values to be used in the query
      * @return the result of the query as a list of maps
-     * @throws DatabaseException if the query fails
+     * @throws DatabaseException if the query fails and strict reads are on
      */
     public List<Map<String, Object>> select(String tableName, Consumer<Schema> consumer) {
         Schema schema = SchemaBuilder.select(tableName);
@@ -213,7 +325,10 @@ public class RequestHelper {
             return schema.executeSelect(this.connection, this.logger);
         } catch (Exception exception) {
             this.logger.error("Select operation failed on table: " + tableName + " - " + exception.getMessage());
-            throw new DatabaseException("select", tableName, exception);
+            if (this.strictReads) {
+                throw new DatabaseException("select", tableName, exception);
+            }
+            return new ArrayList<>();
         }
     }
 
@@ -224,7 +339,7 @@ public class RequestHelper {
      * @param tableName the name of the table
      * @param clazz     the class type of the objects in the result list
      * @return the result of the query as a list of objects of the given class type
-     * @throws DatabaseException if the query or the mapping fails
+     * @throws DatabaseException if the query or the mapping fails and strict reads are on
      */
     public <T> List<T> selectAll(String tableName, Class<T> clazz) {
         Schema schema = SchemaBuilder.select(tableName);
@@ -232,7 +347,10 @@ public class RequestHelper {
             return schema.executeSelect(clazz, this.connection, this.logger);
         } catch (Exception exception) {
             this.logger.error("SelectAll operation failed on table: " + tableName + " - " + exception.getMessage());
-            throw new DatabaseException("selectAll", tableName, exception);
+            if (this.strictReads) {
+                throw new DatabaseException("selectAll", tableName, exception);
+            }
+            return new ArrayList<>();
         }
     }
 
@@ -244,7 +362,7 @@ public class RequestHelper {
      * @param consumer  the consumer that defines the columns and values to be used in the query
      * @return the number of rows deleted
      */
-    public int delete(String tableName, Consumer<Schema> consumer) {
+    public int deleteAndCount(String tableName, Consumer<Schema> consumer) {
         Schema schema = SchemaBuilder.delete(tableName);
         consumer.accept(schema);
         try {
@@ -265,7 +383,7 @@ public class RequestHelper {
      * @param schemas a list of Schema objects representing the data to be upserted
      * @return the number of rows affected, as reported by the driver
      */
-    public int upsertMultiple(List<Schema> schemas) {
+    public int upsertMultipleAndCount(List<Schema> schemas) {
         UpsertBatchRequest request = new UpsertBatchRequest(schemas);
         return request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
     }
@@ -281,13 +399,13 @@ public class RequestHelper {
      * @param <T>       the type of the DTO
      * @return the number of rows affected, as reported by the driver
      */
-    public <T> int upsertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+    public <T> int upsertMultipleAndCount(String tableName, Class<T> clazz, List<T> dataList) {
         List<Schema> schemas = new ArrayList<>();
         for (T data : dataList) {
             Schema schema = SchemaBuilder.upsert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
             schemas.add(schema);
         }
-        return this.upsertMultiple(schemas);
+        return this.upsertMultipleAndCount(schemas);
     }
 
     /**
@@ -301,7 +419,7 @@ public class RequestHelper {
      * @return the first generated key when the table has an auto-increment column, otherwise the
      * number of inserted rows
      */
-    public int insertMultiple(List<Schema> schemas) {
+    public int insertMultipleAndGetKey(List<Schema> schemas) {
         InsertBatchRequest request = new InsertBatchRequest(schemas);
         return request.execute(this.connection, this.connection.getDatabaseConfiguration(), this.logger);
     }
@@ -318,13 +436,13 @@ public class RequestHelper {
      * @return the first generated key when the table has an auto-increment column, otherwise the
      * number of inserted rows
      */
-    public <T> int insertMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+    public <T> int insertMultipleAndGetKey(String tableName, Class<T> clazz, List<T> dataList) {
         List<Schema> schemas = new ArrayList<>();
         for (T data : dataList) {
             Schema schema = SchemaBuilder.insert(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
             schemas.add(schema);
         }
-        return this.insertMultiple(schemas);
+        return this.insertMultipleAndGetKey(schemas);
     }
 
     /**
@@ -338,7 +456,7 @@ public class RequestHelper {
      * @param schemas a list of Schema objects representing the data to be updated
      * @return the total number of rows changed
      */
-    public int updateMultiple(List<Schema> schemas) {
+    public int updateMultipleAndCount(List<Schema> schemas) {
 
         if (this.connection.getDatabaseConfiguration().getDatabaseType() == DatabaseType.SQLITE) {
             int total = 0;
@@ -371,13 +489,13 @@ public class RequestHelper {
      * @param <T>       the type of the DTO
      * @return the total number of rows changed
      */
-    public <T> int updateMultiple(String tableName, Class<T> clazz, List<T> dataList) {
+    public <T> int updateMultipleAndCount(String tableName, Class<T> clazz, List<T> dataList) {
         List<Schema> schemas = new ArrayList<>();
         for (T data : dataList) {
             Schema schema = SchemaBuilder.update(tableName, ConsumerConstructor.createConsumerFromTemplate(clazz, data));
             schemas.add(schema);
         }
-        return this.updateMultiple(schemas);
+        return this.updateMultipleAndCount(schemas);
     }
 
     /**
@@ -462,7 +580,7 @@ public class RequestHelper {
             BoundDatabaseConnection boundConnection = new BoundDatabaseConnection(this.connection.getDatabaseConfiguration(), this.logger, transaction.getConnection());
             T result;
             try {
-                result = callback.execute(new RequestHelper(boundConnection, this.logger));
+                result = callback.execute(new RequestHelper(boundConnection, this.logger).setStrictReads(this.strictReads));
             } catch (RuntimeException exception) {
                 transaction.rollback();
                 throw exception;

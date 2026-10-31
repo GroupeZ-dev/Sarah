@@ -92,7 +92,7 @@ public class IncrementRequestTest extends DatabaseTestBase {
     public void testUpdateIncrementAndExpression() {
         upsertAmount("a", "coins", 10, null);
 
-        int changed = requestHelper.update("test_counters", schema -> {
+        int changed = requestHelper.updateAndCount("test_counters", schema -> {
             schema.increment("amount", -4);
             schema.expression("version", "`version` + ?", 10);
             schema.where("owner", "a");
@@ -108,14 +108,14 @@ public class IncrementRequestTest extends DatabaseTestBase {
     public void testUpdateReturnsZeroWhenVersionDoesNotMatch() {
         upsertAmount("a", "coins", 10, null);
 
-        int stale = requestHelper.update("test_counters", schema -> {
+        int stale = requestHelper.updateAndCount("test_counters", schema -> {
             schema.decimal("amount", 50);
             schema.increment("version", 1);
             schema.where("owner", "a");
             schema.where("name", "coins");
             schema.where("version", 42);
         });
-        int current = requestHelper.update("test_counters", schema -> {
+        int current = requestHelper.updateAndCount("test_counters", schema -> {
             schema.decimal("amount", 50);
             schema.increment("version", 1);
             schema.where("owner", "a");
@@ -163,7 +163,7 @@ public class IncrementRequestTest extends DatabaseTestBase {
                 schema.string("label", "batch").insertOnly();
             }));
         }
-        assertTrue(requestHelper.upsertMultiple(schemas) > 0);
+        assertTrue(requestHelper.upsertMultipleAndCount(schemas) > 0);
 
         assertEquals(0, new BigDecimal("3").compareTo(amount("a", "coins")));
         assertEquals(0, new BigDecimal("2").compareTo(amount("b", "coins")));
@@ -187,7 +187,7 @@ public class IncrementRequestTest extends DatabaseTestBase {
             }));
         }
 
-        assertEquals(2, requestHelper.updateMultiple(schemas));
+        assertEquals(2, requestHelper.updateMultipleAndCount(schemas));
         assertEquals(0, new BigDecimal("5").compareTo(amount("a", "coins")));
         assertEquals(0, new BigDecimal("5").compareTo(amount("b", "coins")));
     }
@@ -198,7 +198,7 @@ public class IncrementRequestTest extends DatabaseTestBase {
         upsertAmount("a", "gems", 1, null);
         upsertAmount("b", "coins", 1, null);
 
-        assertEquals(2, requestHelper.delete("test_counters", schema -> schema.where("owner", "a")));
-        assertEquals(0, requestHelper.delete("test_counters", schema -> schema.where("owner", "a")));
+        assertEquals(2, requestHelper.deleteAndCount("test_counters", schema -> schema.where("owner", "a")));
+        assertEquals(0, requestHelper.deleteAndCount("test_counters", schema -> schema.where("owner", "a")));
     }
 }

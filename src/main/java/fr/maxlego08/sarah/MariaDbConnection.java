@@ -3,7 +3,6 @@ package fr.maxlego08.sarah;
 import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.Connection;
-import java.sql.SQLException;
 
 /**
  * Unpooled MariaDB connection. Prefer {@link HikariDatabaseConnection} on a server.
@@ -15,7 +14,7 @@ public class MariaDbConnection extends DatabaseConnection {
     }
 
     @Override
-    public Connection connectToDatabase() throws SQLException {
+    public Connection connectToDatabase() throws Exception {
         return this.openDriverConnection();
     }
 }
