@@ -117,6 +117,118 @@ public class MigrationManager {
     }
 
     /**
+     * Returns the names of the migrations recorded in the migration table, creating the table
+     * when it does not exist yet. A migration is recorded under its class's simple name.
+     *
+     * @param databaseConnection the connection to the database
+     * @param logger             the logger to use
+     * @return the names of the applied migrations
+     * @throws DatabaseException if the migration table cannot be read
+     */
+    public static List<String> getAppliedMigrations(DatabaseConnection databaseConnection, Logger logger) {
+        createMigrationTable(databaseConnection, logger);
+        return getMigrations(databaseConnection, logger);
+    }
+
+    /**
+     * Returns the registered migrations that are not recorded in the migration table yet, in
+     * the order they were registered.
+     *
+     * @param databaseConnection the connection to the database
+     * @param logger             the logger to use
+     * @return the migrations {@link #execute} would apply
+     * @throws DatabaseException if the migration table cannot be read
+     */
+    public static List<Migration> getPendingMigrations(DatabaseConnection databaseConnection, Logger logger) {
+        List<String> applied = getAppliedMigrations(databaseConnection, logger);
+        return migrations.stream()
+                .filter(migration -> !applied.contains(migration.getClass().getSimpleName()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Rolls back the last {@code steps} applied migrations, the most recent first: runs their
+     * {@link Migration#down()} and removes them from the migration table, so the next
+     * {@link #execute} applies them again.
+     *
+     * <p>"Last" follows the order the migrations were registered, which is the order
+     * {@link #execute} applies them. Only registered migrations can be rolled back. Every
+     * migration to roll back must have a {@code down()}: when one does not, nothing is changed
+     * and an {@link IllegalStateException} is thrown.</p>
+     *
+     * @param databaseConnection the connection to the database
+     * @param logger             the logger to use
+     * @param steps              how many migrations to roll back
+     * @return the names of the migrations rolled back, the most recent first
+     * @throws DatabaseException if a {@code down()} schema or the migration table update fails.
+     *                           The migrations rolled back before it stay rolled back.
+     */
+    public static List<String> rollback(DatabaseConnection databaseConnection, Logger logger, int steps) {
+        if (steps < 1) {
+            throw new IllegalArgumentException("steps must be at least 1");
+        }
+
+        List<String> applied = getAppliedMigrations(databaseConnection, logger);
+        List<Migration> toRollback = new ArrayList<>();
+        for (int index = migrations.size() - 1; index >= 0 && toRollback.size() < steps; index--) {
+            Migration migration = migrations.get(index);
+            if (applied.contains(migration.getClass().getSimpleName())) {
+                toRollback.add(migration);
+            }
+        }
+
+        // Collect every down() first, so a migration without one stops the rollback before
+        // anything changed
+        Map<Migration, List<Schema>> downSchemas = new LinkedHashMap<>();
+        for (Migration migration : toRollback) {
+            schemas.clear();
+            migration.down();
+            if (schemas.isEmpty()) {
+                throw new IllegalStateException("Migration " + migration.getClass().getSimpleName() + " has no down() and cannot be rolled back");
+            }
+            downSchemas.put(migration, new ArrayList<>(schemas));
+        }
+        schemas.clear();
+
+        List<String> rolledBack = new ArrayList<>();
+        for (Map.Entry<Migration, List<Schema>> entry : downSchemas.entrySet()) {
+            String name = entry.getKey().getClass().getSimpleName();
+            for (Schema schema : entry.getValue()) {
+                try {
+                    schema.execute(databaseConnection, logger);
+                } catch (SQLException exception) {
+                    logger.error("Failed to roll back migration " + name + ": " + exception.getMessage());
+                    throw new DatabaseException("rollback", schema.getTableName(), exception);
+                }
+            }
+            deleteMigration(databaseConnection, logger, name);
+            logger.info("Rolled back migration " + name);
+            rolledBack.add(name);
+        }
+        return rolledBack;
+    }
+
+    /**
+     * Rolls back the most recently applied migration.
+     *
+     * @return the name of the migration rolled back, in a list, or an empty list when none is
+     * applied
+     * @see #rollback(DatabaseConnection, Logger, int)
+     */
+    public static List<String> rollback(DatabaseConnection databaseConnection, Logger logger) {
+        return rollback(databaseConnection, logger, 1);
+    }
+
+    private static void deleteMigration(DatabaseConnection databaseConnection, Logger logger, String name) {
+        try {
+            SchemaBuilder.delete(migrationTableName).where("migration", name).execute(databaseConnection, logger);
+        } catch (SQLException exception) {
+            logger.error("Failed to delete migration record: " + exception.getMessage());
+            throw new DatabaseException("delete-migration", migrationTableName, exception);
+        }
+    }
+
+    /**
      * Adds the columns of an already applied create-or-alter migration that the table lacks.
      */
     private static void addMissingColumns(DatabaseConnection databaseConnection, Logger logger, Schema schema) {
