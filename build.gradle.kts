@@ -13,7 +13,7 @@ extra.set("classifier", System.getProperty("archive.classifier"))
 extra.set("sha", System.getProperty("github.sha"))
 
 group = "fr.maxlego08.sarah"
-version = "1.26"
+version = "1.27"
 
 rootProject.extra.properties["sha"]?.let { sha ->
     version = sha
