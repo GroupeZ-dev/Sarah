@@ -1,0 +1,23 @@
+# UTF-8. Use dedicated disposable databases: tests create and drop tables.
+# Default engine for gradlew test (named tasks override this).
+type=SQLITE
+
+# SQLite requires no connection settings.
+
+mariadb.host=localhost
+mariadb.port=3306
+mariadb.database=sarah_test
+mariadb.user=sarah
+mariadb.password=sarah
+
+mysql.host=localhost
+mysql.port=3306
+mysql.database=sarah_test
+mysql.user=sarah
+mysql.password=sarah
+
+postgresql.host=localhost
+postgresql.port=5432
+postgresql.database=sarah_test
+postgresql.user=sarah
+postgresql.password=sarah

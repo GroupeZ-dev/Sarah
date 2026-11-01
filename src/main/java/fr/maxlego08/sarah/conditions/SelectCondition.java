@@ -1,5 +1,7 @@
 package fr.maxlego08.sarah.conditions;
 
+import fr.maxlego08.sarah.security.SqlIdentifiers;
+
 import java.util.Objects;
 
 public class SelectCondition {
@@ -43,20 +45,15 @@ public class SelectCondition {
      * @return the SQL column name
      */
     public String getSelectColumn() {
-        String result = this.tablePrefix == null ? this.getColumnAndAliases() : this.tablePrefix + "." + this.getColumnAndAliases();
+        String qualifiedColumn = this.tablePrefix == null ? SqlIdentifiers.quote(this.column) : SqlIdentifiers.reference(this.tablePrefix) + "." + SqlIdentifiers.quote(this.column);
         if (isCoalesce) {
-            String tableName = this.tablePrefix == null ? "`" + this.column + "`" : this.tablePrefix + ".`" + this.column + "`";
-            return "COALESCE(" + tableName + ", " + defaultValue + ")" + getAliases();
+            return "COALESCE(" + qualifiedColumn + ", " + SqlIdentifiers.literal(defaultValue) + ")" + getAliases();
         }
-        return result;
-    }
-
-    private String getColumnAndAliases() {
-        return "`" + this.column + "`" + getAliases();
+        return qualifiedColumn + getAliases();
     }
 
     private String getAliases() {
-        return this.aliases == null ? "" : " as " + this.aliases;
+        return this.aliases == null ? "" : " as " + SqlIdentifiers.expression(this.aliases);
     }
 
     @Override

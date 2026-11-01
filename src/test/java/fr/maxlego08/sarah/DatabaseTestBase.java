@@ -48,7 +48,7 @@ public abstract class DatabaseTestBase {
         }
 
         // Clean up SQLite file if exists
-        if (configuration.getDatabaseType() == DatabaseType.SQLITE) {
+        if (sqliteFile != null) {
             this.sqliteFile.delete();
         }
     }
@@ -57,8 +57,17 @@ public abstract class DatabaseTestBase {
      * Create database configuration for tests
      */
     protected DatabaseConfiguration createConfiguration() {
-        // Default to SQLite for easier testing
-        return DatabaseConfiguration.sqlite(true);
+        // Default to SQLite for easier testing. Pass -Dsarah.test.type=POSTGRESQL (or MYSQL,
+        // MARIADB) plus sarah.test.host/port/user/password/database to run against a server.
+        String type = System.getProperty("sarah.test.type", "SQLITE").trim().toUpperCase(java.util.Locale.ROOT);
+        if (type.equals("POSTGRES")) type = "POSTGRESQL";
+        DatabaseType databaseType = DatabaseType.valueOf(type);
+        if (type.equalsIgnoreCase("SQLITE")) {
+            return DatabaseConfiguration.sqlite(true);
+        }
+        return new DatabaseConfiguration("", System.getProperty("sarah.test.user", "sarah"), System.getProperty("sarah.test.password", "sarah"),
+                Integer.parseInt(System.getProperty("sarah.test.port", databaseType == DatabaseType.POSTGRESQL ? "5432" : "3306")), System.getProperty("sarah.test.host", "localhost"),
+                System.getProperty("sarah.test.database", "sarah"), true, databaseType);
     }
 
     /**
@@ -80,6 +89,8 @@ public abstract class DatabaseTestBase {
                 return new MySqlConnection(configuration, logger);
             case MARIADB:
                 return new MariaDbConnection(configuration, logger);
+            case POSTGRESQL:
+                return new PostgreSqlConnection(configuration, logger);
             default:
                 throw new IllegalArgumentException("Unsupported database type: " + type);
         }
@@ -96,8 +107,8 @@ public abstract class DatabaseTestBase {
      * Clean up all test tables
      */
     protected void cleanupDatabase() throws SQLException {
-        Connection conn = connection.getConnection();
-        try (Statement stmt = conn.createStatement()) {
+        try (Connection conn = connection.getConnection();
+             Statement stmt = conn.createStatement()) {
             // Drop common test tables
             String[] tables = {"test_users", "test_products", "test_orders", "test_composite",
                              "test_autoincrement", "migrations", "test_join_a", "test_join_b",
@@ -105,12 +116,12 @@ public abstract class DatabaseTestBase {
                              "test_unique", "test_foreign", "test_referenced", "test_users_dto",
                              "test_complex", "test_profiles", "test_old_name", "test_new_name",
                              "test_parent", "test_child", "test_migration", "test_idempotent",
-                             "test_alter", "test_all_types", "test_nullable"};
+                             "test_alter", "test_all_types", "test_nullable", "test_counters", "test_pages", "test_members", "test_sales", "test_async", "test_rollback_a", "test_rollback_b", "test_rollback_c"};
 
             for (String table : tables) {
                 try {
-                    if (configuration.getDatabaseType() == DatabaseType.SQLITE) {
-                        stmt.execute("DROP TABLE IF EXISTS " + table);
+                    if (configuration.getDatabaseType() == DatabaseType.POSTGRESQL) {
+                        stmt.execute("DROP TABLE IF EXISTS " + table + " CASCADE");
                     } else {
                         stmt.execute("DROP TABLE IF EXISTS " + table);
                     }

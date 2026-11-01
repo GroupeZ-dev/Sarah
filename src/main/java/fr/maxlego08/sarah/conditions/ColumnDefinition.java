@@ -1,9 +1,12 @@
 package fr.maxlego08.sarah.conditions;
 
 import fr.maxlego08.sarah.DatabaseConfiguration;
-import fr.maxlego08.sarah.database.DatabaseType;
+import fr.maxlego08.sarah.dialect.Dialect;
+import fr.maxlego08.sarah.security.SqlIdentifiers;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,6 +24,10 @@ public class ColumnDefinition {
     private boolean isAutoIncrement;
     private boolean unique = false;
     private List<String> enumValues;
+    private ColumnOperation operation = ColumnOperation.SET;
+    private String expression;
+    private List<Object> expressionParameters = Collections.emptyList();
+    private boolean updatedAtDefault;
 
     public ColumnDefinition(String name, String type) {
         this.name = name;
@@ -38,47 +45,39 @@ public class ColumnDefinition {
      * @return The SQL string representation of the column
      */
     public String build(DatabaseConfiguration databaseConfiguration) {
-        // For SQLite autoincrement, use INTEGER instead of BIGINT/INT
-        String columnType = type;
-        if (isAutoIncrement && databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
-            if (type.equalsIgnoreCase("BIGINT") || type.equalsIgnoreCase("INT") || type.equalsIgnoreCase("INTEGER")) {
-                columnType = "INTEGER";
-            }
-        }
+        Dialect dialect = databaseConfiguration.getDialect();
+        String columnType = dialect.mapType(type);
 
-        StringBuilder columnSQL = new StringBuilder("`" + name + "` " + columnType);
-
-        // Handle ENUM type with values
+        String sizedType;
         if (enumValues != null && !enumValues.isEmpty()) {
-            if (databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
-                // SQLite doesn't support ENUM, use TEXT instead
-                columnSQL = new StringBuilder("`" + name + "` TEXT");
+            String fallbackType = dialect.enumFallbackType();
+            if (fallbackType != null) {
+                sizedType = fallbackType;
             } else {
-                // MySQL/MariaDB ENUM syntax: ENUM('value1', 'value2', ...)
                 String values = enumValues.stream()
                         .map(v -> "'" + v.replace("'", "''") + "'")
                         .collect(Collectors.joining(", "));
-                columnSQL = new StringBuilder("`" + name + "` ENUM(" + values + ")");
+                sizedType = "ENUM(" + values + ")";
             }
         } else if (length != 0 && decimal != 0) {
-            columnSQL.append("(").append(length).append(",").append(decimal).append(")");
+            sizedType = columnType + "(" + length + "," + decimal + ")";
         } else if (length != 0) {
-            columnSQL.append("(").append(length).append(")");
+            sizedType = columnType + "(" + length + ")";
+        } else {
+            sizedType = columnType;
         }
 
-        // For autoincrement columns with primary key
+        StringBuilder columnSQL = new StringBuilder(SqlIdentifiers.quote(name) + " ");
         if (isAutoIncrement && isPrimaryKey) {
-            if (databaseConfiguration.getDatabaseType() == DatabaseType.SQLITE) {
-                // SQLite: INTEGER PRIMARY KEY AUTOINCREMENT (inline, no NOT NULL needed)
-                columnSQL.append(" PRIMARY KEY AUTOINCREMENT");
+            columnSQL.append(dialect.autoIncrementColumn(sizedType));
+            if (dialect.inlineAutoIncrementPrimaryKey()) {
                 if (unique) {
                     columnSQL.append(" UNIQUE");
                 }
                 return columnSQL.toString();
-            } else {
-                // MySQL/MariaDB: column will have AUTO_INCREMENT
-                columnSQL.append(" AUTO_INCREMENT");
             }
+        } else {
+            columnSQL.append(sizedType);
         }
 
         if (nullable) {
@@ -87,7 +86,9 @@ public class ColumnDefinition {
             columnSQL.append(" NOT NULL");
         }
 
-        if (defaultValue != null) {
+        if (updatedAtDefault) {
+            columnSQL.append(" DEFAULT ").append(dialect.updatedAtDefault());
+        } else if (defaultValue != null) {
             columnSQL.append(" DEFAULT ").append(defaultValue);
         }
 
@@ -107,7 +108,7 @@ public class ColumnDefinition {
     }
 
     public String getSafeName() {
-        return String.format("`%s`", this.name);
+        return SqlIdentifiers.quote(this.name);
     }
 
     public String getType() {
@@ -147,6 +148,19 @@ public class ColumnDefinition {
 
     public void setDefaultValue(String defaultValue) {
         this.defaultValue = defaultValue;
+    }
+
+    public boolean isUpdatedAtDefault() {
+        return updatedAtDefault;
+    }
+
+    /**
+     * Uses the dialect's {@code updated_at} default (refreshed on update where the engine supports
+     * it) instead of {@link #getDefaultValue()}.
+     */
+    public ColumnDefinition setUpdatedAtDefault(boolean updatedAtDefault) {
+        this.updatedAtDefault = updatedAtDefault;
+        return this;
     }
 
     public boolean isPrimaryKey() {
@@ -222,5 +236,111 @@ public class ColumnDefinition {
                 .map(Enum::name)
                 .collect(Collectors.toList());
         return this;
+    }
+
+    public ColumnOperation getOperation() {
+        return operation;
+    }
+
+    public ColumnDefinition setOperation(ColumnOperation operation) {
+        this.operation = operation;
+        return this;
+    }
+
+    public String getExpression() {
+        return expression;
+    }
+
+    public List<Object> getExpressionParameters() {
+        return expressionParameters;
+    }
+
+    public ColumnDefinition setExpression(String expression, Object... parameters) {
+        this.operation = ColumnOperation.EXPRESSION;
+        this.expression = expression;
+        this.expressionParameters = new ArrayList<>(Arrays.asList(parameters));
+        return this;
+    }
+
+    /**
+     * Whether an upsert puts this column in the row it inserts.
+     */
+    public boolean isInsertedByUpsert() {
+        return !this.isAutoIncrement && this.operation != ColumnOperation.EXPRESSION;
+    }
+
+    /**
+     * The value placeholder of this column in an {@code INSERT}: {@code ?} for a value, or the raw
+     * expression.
+     *
+     * @param parameters receives the parameters bound to the placeholder, in order
+     */
+    public String insertPlaceholder(List<Object> parameters) {
+        if (this.operation == ColumnOperation.EXPRESSION) {
+            parameters.addAll(this.expressionParameters);
+            return this.expression;
+        }
+        parameters.add(this.object);
+        return "?";
+    }
+
+    /**
+     * The {@code SET} assignment of this column in an {@code UPDATE}.
+     *
+     * @param parameters receives the parameters bound to the assignment, in order
+     */
+    public String updateAssignment(List<Object> parameters) {
+        String safeName = this.getSafeName();
+        switch (this.operation) {
+            case INCREMENT:
+                parameters.add(this.object);
+                return safeName + " = " + safeName + " + ?";
+            case EXPRESSION:
+                parameters.addAll(this.expressionParameters);
+                return safeName + " = " + this.expression;
+            default:
+                parameters.add(this.object);
+                return safeName + " = ?";
+        }
+    }
+
+    /**
+     * The assignment applied to this column when an upsert finds an existing row.
+     *
+     * @param dialect    the dialect of the statement
+     * @param tableName  the table, used to reference the existing row
+     * @param parameters receives the parameters bound to the assignment, in order
+     * @param batch      whether the statement inserts several rows, where MySQL must reference the
+     *                   inserted values through {@code VALUES(col)} instead of re-binding them
+     * @return the assignment, or {@code null} when the existing value is kept
+     */
+    public String conflictAssignment(Dialect dialect, String tableName, List<Object> parameters, boolean batch) {
+        String safeName = this.getSafeName();
+        boolean onConflict = dialect.usesOnConflict();
+        switch (this.operation) {
+            case INSERT_ONLY:
+                return null;
+            case EXPRESSION:
+                parameters.addAll(this.expressionParameters);
+                return safeName + " = " + this.expression;
+            case INCREMENT:
+                if (onConflict) {
+                    return safeName + " = " + tableName + "." + safeName + " + excluded." + safeName;
+                }
+                if (batch) {
+                    return safeName + " = " + safeName + " + VALUES(" + safeName + ")";
+                }
+                parameters.add(this.object);
+                return safeName + " = " + safeName + " + ?";
+            default:
+                if (onConflict) {
+                    return safeName + " = excluded." + safeName;
+                }
+                if (batch) {
+                    return safeName + " = VALUES(" + safeName + ")";
+                }
+                parameters.add(this.object);
+                return safeName + " = ?";
+        }
     }
 }

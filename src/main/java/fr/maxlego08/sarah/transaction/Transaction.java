@@ -65,7 +65,8 @@ public class Transaction implements AutoCloseable {
     }
 
     /**
-     * Automatically rolls back the transaction if it hasn't been committed.
+     * Automatically rolls back the transaction if it hasn't been committed, then releases the
+     * connection, which returns it to the pool for a pooled connection.
      * This is called when using try-with-resources.
      */
     @Override
@@ -77,6 +78,11 @@ public class Transaction implements AutoCloseable {
             connection.setAutoCommit(true);
         } catch (SQLException exception) {
             throw new DatabaseException("close-transaction", exception);
+        } finally {
+            try {
+                connection.close();
+            } catch (SQLException ignored) {
+            }
         }
     }
 
