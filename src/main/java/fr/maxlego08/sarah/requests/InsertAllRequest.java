@@ -48,7 +48,7 @@ public class InsertAllRequest implements Executor {
         insertBuilder.append(" FROM ");
         insertBuilder.append(this.schema.getTableName());
 
-        String insertQuery = databaseConfiguration.replacePrefix(insertBuilder.toString());
+        String insertQuery = databaseConfiguration.prepare(insertBuilder.toString());
 
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + insertQuery);
@@ -57,7 +57,7 @@ public class InsertAllRequest implements Executor {
         try (Connection connection = databaseConnection.getConnection(); PreparedStatement preparedStatement = connection.prepareStatement(insertQuery)) {
             preparedStatement.executeUpdate();
         } catch (SQLException exception) {
-            logger.info("Insert all operation failed from table: " + this.schema.getTableName() + " to table: " + this.toTableName + " - " + exception.getMessage());
+            logger.error("Insert all operation failed from table: " + this.schema.getTableName() + " to table: " + this.toTableName + " - " + exception.getMessage());
             throw new DatabaseException("insertAll", this.toTableName, exception);
         }
 

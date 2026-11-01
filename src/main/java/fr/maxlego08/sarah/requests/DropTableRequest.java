@@ -22,11 +22,11 @@ public class DropTableRequest implements Executor {
     public int execute(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
         String tableName = this.schema.getTableName();
         if (tableName == null || tableName.trim().isEmpty()) {
-            logger.info("Invalid table name.");
+            logger.warn("Invalid table name.");
             return -1;
         }
 
-        String finalQuery = databaseConfiguration.replacePrefix("DROP TABLE IF EXISTS " + tableName);
+        String finalQuery = databaseConfiguration.prepare("DROP TABLE IF EXISTS " + tableName);
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }
@@ -36,7 +36,7 @@ public class DropTableRequest implements Executor {
             preparedStatement.execute();
             return 0;
         } catch (SQLException exception) {
-            logger.info("Error while executing SQL query: " + exception.getMessage());
+            logger.error("Error while executing SQL query: " + exception.getMessage());
             return -1;
         }
     }

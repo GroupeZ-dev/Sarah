@@ -4,6 +4,7 @@ import fr.maxlego08.sarah.database.Schema;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.Date;
@@ -38,18 +39,19 @@ public class ConsumerConstructor {
     public static Consumer<Schema> createConsumerFromTemplate(Class<?> template, Object data) {
         Constructor<?>[] constructors = template.getDeclaredConstructors();
 
-        Field[] allFields = template.getDeclaredFields();
-        // Filter out synthetic fields and those annotated with @TransientField
-        Field[] fields = Arrays.stream(allFields)
+        Field[] fields = mappedFields(template);
+        // Static fields used to be counted, so a constructor matching that count is still accepted
+        long countWithStatic = Arrays.stream(template.getDeclaredFields())
                 .filter(f -> !f.isSynthetic())
                 .filter(f -> !f.isAnnotationPresent(TransientField.class))
-                .toArray(Field[]::new);
+                .count();
 
         boolean hasCompatibleConstructor = Arrays.stream(constructors)
                 .peek(constructor -> constructor.setAccessible(true))
-                .anyMatch(constructor -> Arrays.stream(constructor.getParameters())
+                .map(constructor -> Arrays.stream(constructor.getParameters())
                         .filter(p -> !p.isSynthetic())
-                        .count() == fields.length);
+                        .count())
+                .anyMatch(count -> count == fields.length || count == countWithStatic);
 
         if (!hasCompatibleConstructor) {
             throw new IllegalArgumentException("Fields count does not match constructor parameters count");
@@ -130,6 +132,21 @@ public class ConsumerConstructor {
                 }
             }
         };
+    }
+
+    /**
+     * The fields of a class that map to columns, in declaration order: every field except
+     * synthetic and static ones and those annotated with {@link TransientField}.
+     *
+     * @param template the class
+     * @return the mapped fields
+     */
+    public static Field[] mappedFields(Class<?> template) {
+        return Arrays.stream(template.getDeclaredFields())
+                .filter(f -> !f.isSynthetic())
+                .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                .filter(f -> !f.isAnnotationPresent(TransientField.class))
+                .toArray(Field[]::new);
     }
 
     /**

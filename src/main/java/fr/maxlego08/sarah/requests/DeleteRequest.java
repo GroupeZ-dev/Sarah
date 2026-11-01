@@ -24,7 +24,7 @@ public class DeleteRequest implements Executor {
         StringBuilder sql = new StringBuilder("DELETE FROM ").append(schemaBuilder.getTableName());
         schemaBuilder.whereConditions(sql);
 
-        String finalQuery = databaseConfiguration.replacePrefix(sql.toString());
+        String finalQuery = databaseConfiguration.prepare(sql.toString());
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }
@@ -35,7 +35,7 @@ public class DeleteRequest implements Executor {
             int result = preparedStatement.executeUpdate();
             return result;
         } catch (SQLException exception) {
-            logger.info("Delete operation failed on table: " + schemaBuilder.getTableName() + " - " + exception.getMessage());
+            logger.error("Delete operation failed on table: " + schemaBuilder.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("delete", schemaBuilder.getTableName(), exception);
         }
     }

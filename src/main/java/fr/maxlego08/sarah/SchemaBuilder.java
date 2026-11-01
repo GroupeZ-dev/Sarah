@@ -1,6 +1,7 @@
 package fr.maxlego08.sarah;
 
 import fr.maxlego08.sarah.conditions.ColumnDefinition;
+import fr.maxlego08.sarah.conditions.ColumnOperation;
 import fr.maxlego08.sarah.conditions.JoinCondition;
 import fr.maxlego08.sarah.conditions.SelectCondition;
 import fr.maxlego08.sarah.conditions.WhereCondition;
@@ -9,6 +10,7 @@ import fr.maxlego08.sarah.database.Executor;
 import fr.maxlego08.sarah.database.Migration;
 import fr.maxlego08.sarah.database.Schema;
 import fr.maxlego08.sarah.database.SchemaType;
+import fr.maxlego08.sarah.database.StatementBinder;
 import fr.maxlego08.sarah.exceptions.SarahException;
 import fr.maxlego08.sarah.logger.Logger;
 import fr.maxlego08.sarah.requests.AlterRequest;
@@ -22,6 +24,7 @@ import fr.maxlego08.sarah.requests.RenameExecutor;
 import fr.maxlego08.sarah.requests.UpdateRequest;
 import fr.maxlego08.sarah.requests.UpsertRequest;
 import fr.maxlego08.sarah.security.SecureObjectInputStream;
+import fr.maxlego08.sarah.security.SqlIdentifiers;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -35,8 +38,10 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -44,6 +49,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -59,13 +65,17 @@ public class SchemaBuilder implements Schema {
     private final List<WhereCondition> whereConditions = new ArrayList<>();
     private final List<JoinCondition> joinConditions = new ArrayList<>();
     private final List<SelectCondition> selectColumns = new ArrayList<>();
+    private final List<String> groupBy = new ArrayList<>();
+    private final List<WhereCondition> havingConditions = new ArrayList<>();
     private String newTableName;
     private String orderBy;
     private Migration migration;
     private boolean isDistinct;
+    private Integer limit;
+    private Integer offset;
 
     private SchemaBuilder(String tableName, SchemaType schemaType) {
-        this.tableName = tableName;
+        this.tableName = SqlIdentifiers.reference(tableName);
         this.schemaType = schemaType;
     }
 
@@ -82,6 +92,10 @@ public class SchemaBuilder implements Schema {
         schema.migration = oldSchema.getMigration();
         schema.isDistinct = oldSchema.isDistinct();
         schema.newTableName = oldSchema.getNewTableName();
+        schema.limit = oldSchema.getLimit();
+        schema.offset = oldSchema.getOffset();
+        schema.groupBy.addAll(oldSchema.getGroupBy());
+        schema.havingConditions.addAll(oldSchema.getHavingConditions());
 
         return schema;
     }
@@ -92,7 +106,7 @@ public class SchemaBuilder implements Schema {
 
     public static Schema rename(Migration migration, String tableName, String newTableName) {
         SchemaBuilder schema = new SchemaBuilder(tableName, SchemaType.RENAME);
-        schema.newTableName = newTableName;
+        schema.newTableName = SqlIdentifiers.reference(newTableName);
         if (migration != null) {
             schema.migration = migration;
             MigrationManager.registerSchema(schema);
@@ -222,9 +236,8 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public Schema whereIn(String columnName, Object... objects) {
-        // Convert varargs to List to avoid ambiguity
-        List<String> valuesList = Arrays.stream(objects).map(String::valueOf).collect(Collectors.toList());
-        this.whereConditions.add(new WhereCondition(null, columnName, valuesList));
+        // Values keep their type: PostgreSQL rejects an integer column compared to text
+        this.whereConditions.add(new WhereCondition(null, columnName, Arrays.asList(objects)));
         return this;
     }
 
@@ -238,6 +251,129 @@ public class SchemaBuilder implements Schema {
     @Override
     public Schema whereIn(String tablePrefix, String columnName, List<String> strings) {
         this.whereConditions.add(new WhereCondition(tablePrefix, columnName, strings));
+        return this;
+    }
+
+    @Override
+    public Schema where(Consumer<Schema> group) {
+        return this.addGroup(group, false);
+    }
+
+    @Override
+    public Schema orWhere(Consumer<Schema> group) {
+        return this.addGroup(group, true);
+    }
+
+    private Schema addGroup(Consumer<Schema> consumer, boolean or) {
+        SchemaBuilder group = new SchemaBuilder(this.tableName, SchemaType.SELECT);
+        consumer.accept(group);
+        // An empty group adds nothing, rather than a condition that matches every row
+        if (!group.whereConditions.isEmpty()) {
+            WhereCondition condition = new WhereCondition(group.whereConditions);
+            condition.setOr(or);
+            this.whereConditions.add(condition);
+        }
+        return this;
+    }
+
+    @Override
+    public Schema orWhere(String columnName, Object value) {
+        return this.orWhere(null, columnName, "=", value);
+    }
+
+    @Override
+    public Schema orWhere(String columnName, String operator, Object value) {
+        return this.orWhere(null, columnName, operator, value);
+    }
+
+    @Override
+    public Schema orWhere(String tablePrefix, String columnName, String operator, Object value) {
+        this.where(tablePrefix, columnName, operator, value);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema orWhereNull(String columnName) {
+        this.whereNull(columnName);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema orWhereNotNull(String columnName) {
+        this.whereNotNull(columnName);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema orWhereIn(String columnName, Object... objects) {
+        this.whereIn(columnName, objects);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema orWhereBetween(String columnName, Object from, Object to) {
+        this.whereBetween(columnName, from, to);
+        return this.markLastOr();
+    }
+
+    @Override
+    public Schema groupBy(String... columns) {
+        for (String column : columns) {
+            this.groupBy.add(SqlIdentifiers.expression(column));
+        }
+        return this;
+    }
+
+    @Override
+    public Schema having(String expression, String operator, Object value) {
+        this.havingConditions.add(WhereCondition.expression(expression, operator, value));
+        return this;
+    }
+
+    @Override
+    public List<String> getGroupBy() {
+        return this.groupBy;
+    }
+
+    @Override
+    public List<WhereCondition> getHavingConditions() {
+        return this.havingConditions;
+    }
+
+    private void groupByAndHaving(StringBuilder sql) {
+        if (!this.groupBy.isEmpty()) {
+            sql.append(" GROUP BY ").append(String.join(", ", this.groupBy));
+        }
+        if (!this.havingConditions.isEmpty()) {
+            sql.append(" HAVING ").append(WhereCondition.join(this.havingConditions));
+        }
+    }
+
+    private Schema markLastOr() {
+        this.whereConditions.get(this.whereConditions.size() - 1).setOr(true);
+        return this;
+    }
+
+    @Override
+    public Schema whereNotIn(String columnName, Object... objects) {
+        return this.whereNotIn(null, columnName, Arrays.asList(objects));
+    }
+
+    @Override
+    public Schema whereNotIn(String tablePrefix, String columnName, List<?> values) {
+        this.whereConditions.add(new WhereCondition(tablePrefix, columnName, WhereCondition.WhereAction.NOT_IN, values));
+        return this;
+    }
+
+    @Override
+    public Schema whereBetween(String columnName, Object from, Object to) {
+        this.whereConditions.add(new WhereCondition(null, columnName, WhereCondition.WhereAction.BETWEEN, Arrays.asList(from, to)));
+        return this;
+    }
+
+    @Override
+    public Schema whereNotBetween(String columnName, Object from, Object to) {
+        this.whereConditions.add(new WhereCondition(null, columnName, WhereCondition.WhereAction.NOT_BETWEEN, Arrays.asList(from, to)));
         return this;
     }
 
@@ -382,7 +518,7 @@ public class SchemaBuilder implements Schema {
         if (this.columns.isEmpty()) throw new IllegalStateException("No column defined to apply foreign key.");
         ColumnDefinition lastColumn = this.columns.get(this.columns.size() - 1);
 
-        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(`%s`)%s", lastColumn.getSafeName(), safeTable(referenceTable), columnName, onCascade ? " ON DELETE CASCADE" : "");
+        String fkDefinition = String.format("FOREIGN KEY (%s) REFERENCES %s(%s)%s", lastColumn.getSafeName(), safeTable(referenceTable), SqlIdentifiers.quote(columnName), onCascade ? " ON DELETE CASCADE" : "");
         this.foreignKeys.add(fkDefinition);
         return this;
     }
@@ -392,7 +528,7 @@ public class SchemaBuilder implements Schema {
      * Works with %prefix% placeholders since they are replaced after SQL generation.
      */
     private String safeTable(String tableName) {
-        return "`" + tableName + "`";
+        return "`" + SqlIdentifiers.reference(tableName) + "`";
     }
 
     @Override
@@ -420,15 +556,8 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public Schema updatedAt() {
-        ColumnDefinition column = new ColumnDefinition("updated_at", "TIMESTAMP");
-
-        DatabaseConfiguration configuration = MigrationManager.getDatabaseConfiguration();
-        if (configuration.getDatabaseType() == DatabaseType.SQLITE) {
-            column.setDefaultValue("CURRENT_TIMESTAMP");
-        } else {
-            column.setDefaultValue("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-        }
-        this.columns.add(column);
+        // The default depends on the dialect, which is only known when the column is built
+        this.columns.add(new ColumnDefinition("updated_at", "TIMESTAMP").setUpdatedAtDefault(true));
         return this;
     }
 
@@ -474,6 +603,44 @@ public class SchemaBuilder implements Schema {
     }
 
     @Override
+    public Schema increment(String columnName, Number amount) {
+        return this.addColumn(new ColumnDefinition(columnName).setObject(amount).setOperation(ColumnOperation.INCREMENT));
+    }
+
+    @Override
+    public Schema expression(String columnName, String expression, Object... parameters) {
+        return this.addColumn(new ColumnDefinition(columnName).setExpression(expression, parameters));
+    }
+
+    @Override
+    public Schema insertOnly() {
+        getLastColumn().setOperation(ColumnOperation.INSERT_ONLY);
+        return this;
+    }
+
+    @Override
+    public Schema limit(int limit) {
+        this.limit = limit;
+        return this;
+    }
+
+    @Override
+    public Schema offset(int offset) {
+        this.offset = offset;
+        return this;
+    }
+
+    @Override
+    public Integer getLimit() {
+        return this.limit;
+    }
+
+    @Override
+    public Integer getOffset() {
+        return this.offset;
+    }
+
+    @Override
     public Schema timestamps() {
         this.createdAt();
         this.updatedAt();
@@ -493,11 +660,49 @@ public class SchemaBuilder implements Schema {
     @Override
     public void whereConditions(StringBuilder sql) {
         if (!this.whereConditions.isEmpty()) {
-            List<String> conditions = new ArrayList<>();
-            for (WhereCondition condition : this.whereConditions) {
-                conditions.add(condition.getCondition());
+            sql.append(" WHERE ").append(WhereCondition.join(this.whereConditions));
+        }
+    }
+
+    @Override
+    public Object executeSelectAggregate(String function, String columnName, DatabaseConnection databaseConnection, Logger logger) throws SQLException {
+        String aggregate = function.toUpperCase(Locale.ROOT);
+        if (!aggregate.equals("SUM") && !aggregate.equals("MAX") && !aggregate.equals("MIN") && !aggregate.equals("AVG")) {
+            throw new IllegalArgumentException("Unsupported aggregate function: " + function);
+        }
+        return this.executeScalar(aggregate + "(" + SqlIdentifiers.quote(columnName) + ")", null, databaseConnection, logger, "aggregate");
+    }
+
+    @Override
+    public boolean executeExists(DatabaseConnection databaseConnection, Logger logger) throws SQLException {
+        return this.executeScalar("1", 1, databaseConnection, logger, "exists") != null;
+    }
+
+    private Object executeScalar(String selected, Integer limit, DatabaseConnection databaseConnection, Logger logger, String operation) throws SQLException {
+        DatabaseConfiguration databaseConfiguration = databaseConnection.getDatabaseConfiguration();
+        StringBuilder selectQuery = new StringBuilder("SELECT " + selected + " FROM " + this.tableName);
+        for (JoinCondition join : this.joinConditions) {
+            selectQuery.append(" ").append(join.getJoinClause(databaseConfiguration.getDialect()));
+        }
+        this.whereConditions(selectQuery);
+        selectQuery.append(databaseConfiguration.getDialect().limitClause(limit, null));
+
+        String finalQuery = databaseConfiguration.prepare(selectQuery.toString());
+        if (databaseConfiguration.isDebug()) {
+            logger.info("Executing SQL: " + finalQuery);
+        }
+
+        try (Connection connection = databaseConnection.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(finalQuery)) {
+
+            applyWhereConditions(preparedStatement, 1);
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                return resultSet.next() ? resultSet.getObject(1) : null;
             }
-            sql.append(" WHERE ").append(String.join(" AND ", conditions));
+        } catch (SQLException exception) {
+            logger.error("Failed to execute schema select " + operation + ": " + exception.getMessage());
+            throw new SQLException("Failed to execute schema select " + operation + ": " + exception.getMessage(), exception);
         }
     }
 
@@ -506,7 +711,7 @@ public class SchemaBuilder implements Schema {
         StringBuilder selectQuery = new StringBuilder("SELECT COUNT(*) FROM " + tableName);
         this.whereConditions(selectQuery);
 
-        String finalQuery = databaseConnection.getDatabaseConfiguration().replacePrefix(selectQuery.toString());
+        String finalQuery = databaseConnection.getDatabaseConfiguration().prepare(selectQuery.toString());
         if (databaseConnection.getDatabaseConfiguration().isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }
@@ -518,11 +723,11 @@ public class SchemaBuilder implements Schema {
 
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 if (resultSet.next()) {
-                    return resultSet.getInt(1);
+                    return resultSet.getLong(1);
                 }
             }
         } catch (SQLException exception) {
-            logger.info("Failed to execute schema select count: " + exception.getMessage());
+            logger.error("Failed to execute schema select count: " + exception.getMessage());
             throw new SQLException("Failed to execute schema select count: " + exception.getMessage(), exception);
         }
         return 0;
@@ -548,18 +753,20 @@ public class SchemaBuilder implements Schema {
 
         if (!this.joinConditions.isEmpty()) {
             for (JoinCondition join : this.joinConditions) {
-                selectQuery.append(" ").append(join.getJoinClause());
+                selectQuery.append(" ").append(join.getJoinClause(databaseConnection.getDatabaseConfiguration().getDialect()));
             }
         }
 
         this.whereConditions(selectQuery);
+        this.groupByAndHaving(selectQuery);
 
         if (this.orderBy != null) {
             selectQuery.append(" ").append(this.orderBy);
         }
 
         DatabaseConfiguration databaseConfiguration = databaseConnection.getDatabaseConfiguration();
-        String finalQuery = databaseConfiguration.replacePrefix(selectQuery.toString());
+        selectQuery.append(databaseConfiguration.getDialect().limitClause(this.limit, this.offset));
+        String finalQuery = databaseConfiguration.prepare(selectQuery.toString());
 
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
@@ -571,16 +778,22 @@ public class SchemaBuilder implements Schema {
             applyWhereConditions(preparedStatement, 1);
 
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                ResultSetMetaData metaData = resultSet.getMetaData();
+                int columnCount = metaData.getColumnCount();
                 while (resultSet.next()) {
                     Map<String, Object> row = new HashMap<>();
-                    for (int i = 1; i <= resultSet.getMetaData().getColumnCount(); i++) {
-                        row.put(resultSet.getMetaData().getColumnName(i), resultSet.getObject(i));
+                    for (int i = 1; i <= columnCount; i++) {
+                        // The label is the alias when there is one. MySQL reports the original name as the
+                        // column name, which was the key before, so it stays available unless another column uses it.
+                        Object value = resultSet.getObject(i);
+                        row.put(metaData.getColumnLabel(i), value);
+                        row.putIfAbsent(metaData.getColumnName(i), value);
                     }
                     results.add(row);
                 }
             }
         } catch (SQLException exception) {
-            logger.info("Failed to execute schema select: " + exception.getMessage());
+            logger.error("Failed to execute schema select: " + exception.getMessage());
             throw new SQLException("Failed to execute schema select: " + exception.getMessage(), exception);
         }
 
@@ -589,17 +802,63 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void applyWhereConditions(PreparedStatement preparedStatement, int index) throws SQLException {
-        for (WhereCondition condition : this.whereConditions) {
-            if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
-                preparedStatement.setObject(index, condition.getValue());
+        // The driver is only asked which engine it is when IN values need it, as before
+        boolean typedInValues = hasInCondition(this.whereConditions) && isPostgreSql(preparedStatement);
+        index = bindWhereConditions(preparedStatement, index, this.whereConditions, typedInValues);
+        // HAVING comes after WHERE in the statement; it is empty for anything but a grouped select
+        bindWhereConditions(preparedStatement, index, this.havingConditions, typedInValues);
+    }
+
+    /**
+     * @return the index of the next parameter
+     */
+    private static int bindWhereConditions(PreparedStatement preparedStatement, int index, List<WhereCondition> conditions, boolean typedInValues) throws SQLException {
+        for (WhereCondition condition : conditions) {
+            if (condition.getWhereAction() == WhereCondition.WhereAction.GROUP) {
+                index = bindWhereConditions(preparedStatement, index, condition.getGroup(), typedInValues);
+            } else if (condition.getWhereAction() == WhereCondition.WhereAction.NORMAL) {
+                StatementBinder.bind(preparedStatement, index, condition.getValue());
                 index += 1;
-            } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN) {
-                for (String value : condition.getValues()) {
-                    preparedStatement.setObject(index, value);
+            } else if (condition.getWhereAction() == WhereCondition.WhereAction.BETWEEN
+                    || condition.getWhereAction() == WhereCondition.WhereAction.NOT_BETWEEN) {
+                // New conditions, so their bounds keep their type on every engine
+                for (Object value : condition.getParameters()) {
+                    StatementBinder.bind(preparedStatement, index, value);
+                    index += 1;
+                }
+            } else if (condition.getWhereAction() == WhereCondition.WhereAction.IN
+                    || condition.getWhereAction() == WhereCondition.WhereAction.NOT_IN) {
+                // IN values have always been sent as strings, which MySQL, MariaDB and SQLite compare
+                // as before. PostgreSQL refuses a number column compared to text, so it gets the values' types.
+                List<?> values = typedInValues ? condition.getParameters() : condition.getValues();
+                for (Object value : values) {
+                    if (typedInValues && value instanceof String) {
+                        // whereIn(column, List<String>) only takes strings: sent untyped, PostgreSQL
+                        // reads "30" as a number for an integer column and as text for a text one
+                        preparedStatement.setObject(index, value, Types.OTHER);
+                    } else {
+                        StatementBinder.bind(preparedStatement, index, value);
+                    }
                     index += 1;
                 }
             }
         }
+        return index;
+    }
+
+    private static boolean hasInCondition(List<WhereCondition> conditions) {
+        for (WhereCondition condition : conditions) {
+            WhereCondition.WhereAction action = condition.getWhereAction();
+            if (action == WhereCondition.WhereAction.IN || action == WhereCondition.WhereAction.NOT_IN
+                    || (action == WhereCondition.WhereAction.GROUP && hasInCondition(condition.getGroup()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isPostgreSql(PreparedStatement preparedStatement) throws SQLException {
+        return preparedStatement.getConnection().getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("postgresql");
     }
 
     @Override
@@ -610,27 +869,61 @@ public class SchemaBuilder implements Schema {
 
     private <T> List<T> transformResults(List<Map<String, Object>> results, Class<T> clazz) throws Exception {
         List<T> transformedResults = new ArrayList<>();
-        Constructor<?>[] constructors = clazz.getDeclaredConstructors();
-        Constructor<?> firstConstructor = constructors[0];
-        firstConstructor.setAccessible(true);
+        Field[] fields = ConsumerConstructor.mappedFields(clazz);
+        Constructor<?> constructor = findMappingConstructor(clazz, fields);
+        if (constructor == null) {
+            // Historical behaviour: first declared constructor, every declared field by position
+            constructor = clazz.getDeclaredConstructors()[0];
+            fields = clazz.getDeclaredFields();
+        }
+        constructor.setAccessible(true);
 
+        String[] columnNames = new String[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            Column column = fields[i].getAnnotation(Column.class);
+            columnNames[i] = column != null && !column.value().isEmpty() ? column.value() : fields[i].getName();
+        }
+
+        int parameterCount = constructor.getParameterCount();
         for (Map<String, Object> row : results) {
-            Object[] params = new Object[firstConstructor.getParameterCount()];
-            Field[] fields = clazz.getDeclaredFields();
-
-            for (int i = 0; i < fields.length; i++) {
-                Field field = fields[i];
-                if (field.isAnnotationPresent(Column.class)) {
-                    Column column = field.getAnnotation(Column.class);
-                    params[i] = convertToRequiredType(row.get(column.value()), field.getType());
-                } else {
-                    params[i] = convertToRequiredType(row.get(field.getName()), field.getType());
-                }
+            Object[] params = new Object[parameterCount];
+            for (int i = 0; i < Math.min(fields.length, parameterCount); i++) {
+                params[i] = convertToRequiredType(row.get(columnNames[i]), fields[i].getType());
             }
-            T instance = (T) firstConstructor.newInstance(params);
+            T instance = (T) constructor.newInstance(params);
             transformedResults.add(instance);
         }
         return transformedResults;
+    }
+
+    /**
+     * Finds the constructor taking one parameter per mapped field, preferring one whose parameter
+     * types match the fields in order.
+     *
+     * @return the constructor, or {@code null} when none takes one parameter per mapped field
+     */
+    private Constructor<?> findMappingConstructor(Class<?> clazz, Field[] fields) {
+        Constructor<?> sameCount = null;
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            Class<?>[] parameterTypes = constructor.getParameterTypes();
+            if (parameterTypes.length != fields.length) {
+                continue;
+            }
+            boolean typesMatch = true;
+            for (int i = 0; i < fields.length; i++) {
+                if (parameterTypes[i] != fields[i].getType()) {
+                    typesMatch = false;
+                    break;
+                }
+            }
+            if (typesMatch) {
+                return constructor;
+            }
+            if (sameCount == null) {
+                sameCount = constructor;
+            }
+        }
+        return sameCount;
     }
 
     protected Object convertToRequiredType(Object value, Class<?> type) {
@@ -775,12 +1068,12 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void orderBy(String columnName) {
-        this.orderBy = String.format("ORDER BY %s", columnName);
+        this.orderBy = String.format("ORDER BY %s", SqlIdentifiers.expression(columnName));
     }
 
     @Override
     public void orderByDesc(String columnName) {
-        this.orderBy = String.format("ORDER BY %s DESC", columnName);
+        this.orderBy = String.format("ORDER BY %s DESC", SqlIdentifiers.expression(columnName));
     }
 
     @Override
@@ -854,12 +1147,12 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public void addSelect(String prefix, String selectedColumn, String aliases) {
-        this.selectColumns.add(new SelectCondition(null, selectedColumn, aliases, false, null));
+        this.selectColumns.add(new SelectCondition(prefix, selectedColumn, aliases, false, null));
     }
 
     @Override
     public void addSelect(String prefix, String selectedColumn, String aliases, Object defaultValue) {
-        this.selectColumns.add(new SelectCondition(null, selectedColumn, aliases, true, defaultValue));
+        this.selectColumns.add(new SelectCondition(prefix, selectedColumn, aliases, true, defaultValue));
     }
 
     @Override

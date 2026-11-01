@@ -35,7 +35,7 @@ public class CreateIndexRequest implements Executor {
         indexTableSQL.append(column.getSafeName());
         indexTableSQL.append(" )");
 
-        String finalQuery = databaseConfiguration.replacePrefix(indexTableSQL.toString());
+        String finalQuery = databaseConfiguration.prepare(indexTableSQL.toString());
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }
@@ -44,7 +44,7 @@ public class CreateIndexRequest implements Executor {
             preparedStatement.execute();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            logger.info("Create index operation failed on table: " + tableName + " - " + exception.getMessage());
+            logger.error("Create index operation failed on table: " + tableName + " - " + exception.getMessage());
             throw new DatabaseException("createIndex", tableName, exception);
         }
 

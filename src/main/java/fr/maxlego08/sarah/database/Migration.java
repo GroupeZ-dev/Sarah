@@ -19,6 +19,17 @@ public abstract class Migration {
     public abstract void up();
 
     /**
+     * Reverts what {@link #up()} did, for example by dropping the table it created. Called by
+     * {@link fr.maxlego08.sarah.MigrationManager#rollback}. Use the same methods as in
+     * {@link #up()}: {@link #drop(String)}, {@link #modify(String, Consumer)}, and so on.
+     *
+     * <p>Does nothing by default, and a migration without a {@code down()} cannot be rolled
+     * back.</p>
+     */
+    public void down() {
+    }
+
+    /**
      * Creates a new table in the database.
      *
      * @param table    The name of the table to create.

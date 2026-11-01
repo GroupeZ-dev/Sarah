@@ -27,7 +27,7 @@ public class RenameExecutor implements Executor {
         alterTableSQL.append(" RENAME TO ");
         alterTableSQL.append(this.schema.getNewTableName());
 
-        String finalQuery = databaseConfiguration.replacePrefix(alterTableSQL.toString());
+        String finalQuery = databaseConfiguration.prepare(alterTableSQL.toString());
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }
@@ -37,7 +37,7 @@ public class RenameExecutor implements Executor {
             preparedStatement.execute();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            logger.info("Rename table operation failed: " + this.schema.getTableName() + " to " + this.schema.getNewTableName() + " - " + exception.getMessage());
+            logger.error("Rename table operation failed: " + this.schema.getTableName() + " to " + this.schema.getNewTableName() + " - " + exception.getMessage());
             throw new DatabaseException("rename", this.schema.getTableName(), exception);
         }
     }

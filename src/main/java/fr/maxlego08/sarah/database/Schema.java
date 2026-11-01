@@ -9,10 +9,12 @@ import fr.maxlego08.sarah.logger.Logger;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Represents a schema builder for database operations.
@@ -434,6 +436,189 @@ public interface Schema {
     Schema whereIn(String tablePrefix, String columnName, List<String> strings);
 
     /**
+     * Adds a {@code NOT IN} condition. An empty list matches every row.
+     *
+     * @param columnName the column to compare
+     * @param objects    the values the column must not be equal to
+     * @return this schema
+     */
+    default Schema whereNotIn(String columnName, Object... objects) {
+        throw new UnsupportedOperationException("whereNotIn is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code NOT IN} condition on a column of the given table. An empty list matches every
+     * row.
+     *
+     * @param tablePrefix the table or alias the column belongs to, or null
+     * @param columnName  the column to compare
+     * @param values      the values the column must not be equal to
+     * @return this schema
+     */
+    default Schema whereNotIn(String tablePrefix, String columnName, List<?> values) {
+        throw new UnsupportedOperationException("whereNotIn is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code BETWEEN} condition. Both bounds are included.
+     *
+     * @param columnName the column to compare
+     * @param from       the lower bound
+     * @param to         the upper bound
+     * @return this schema
+     */
+    default Schema whereBetween(String columnName, Object from, Object to) {
+        throw new UnsupportedOperationException("whereBetween is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code NOT BETWEEN} condition, matching values outside both bounds.
+     *
+     * @param columnName the column to compare
+     * @param from       the lower bound
+     * @param to         the upper bound
+     * @return this schema
+     */
+    default Schema whereNotBetween(String columnName, Object from, Object to) {
+        throw new UnsupportedOperationException("whereNotBetween is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code LIKE} condition, same as {@code where(columnName, "LIKE", pattern)}.
+     *
+     * @param columnName the column to compare
+     * @param pattern    the pattern, with {@code %} and {@code _} wildcards
+     * @return this schema
+     */
+    default Schema whereLike(String columnName, String pattern) {
+        return this.where(columnName, "LIKE", pattern);
+    }
+
+    /**
+     * Adds a {@code NOT LIKE} condition, same as {@code where(columnName, "NOT LIKE", pattern)}.
+     *
+     * @param columnName the column to compare
+     * @param pattern    the pattern, with {@code %} and {@code _} wildcards
+     * @return this schema
+     */
+    default Schema whereNotLike(String columnName, String pattern) {
+        return this.where(columnName, "NOT LIKE", pattern);
+    }
+
+    /**
+     * Adds a group of conditions between parentheses, joined to the previous conditions with
+     * {@code AND}. Only the {@code where} calls made on the schema given to the consumer are used.
+     *
+     * <pre>
+     * // WHERE `active` = ? AND (`role` = ? OR `role` = ?)
+     * schema.where("active", true).where(group -&gt; group.where("role", "admin").orWhere("role", "owner"));
+     * </pre>
+     *
+     * <p>A group without conditions adds nothing.</p>
+     *
+     * @param group the consumer that adds the conditions of the group
+     * @return this schema
+     */
+    default Schema where(Consumer<Schema> group) {
+        throw new UnsupportedOperationException("where is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a group of conditions between parentheses, joined to the previous conditions with
+     * {@code OR}. A group without conditions adds nothing.
+     *
+     * @param group the consumer that adds the conditions of the group
+     * @return this schema
+     */
+    default Schema orWhere(Consumer<Schema> group) {
+        throw new UnsupportedOperationException("orWhere is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds an equality condition joined to the previous one with {@code OR}.
+     *
+     * <p>As in SQL, {@code AND} is applied before {@code OR}: {@code where(a).where(b).orWhere(c)}
+     * matches {@code (a AND b) OR c}. Use {@link #where(Consumer)} to group conditions
+     * otherwise.</p>
+     *
+     * @param columnName the column to compare
+     * @param value      the value the column must be equal to
+     * @return this schema
+     */
+    default Schema orWhere(String columnName, Object value) {
+        throw new UnsupportedOperationException("orWhere is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to compare
+     * @param operator   the comparison operator, such as {@code >} or {@code LIKE}
+     * @param value      the value to compare with
+     * @return this schema
+     */
+    default Schema orWhere(String columnName, String operator, Object value) {
+        throw new UnsupportedOperationException("orWhere is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a condition on a column of the given table, joined to the previous one with
+     * {@code OR}.
+     *
+     * @param tablePrefix the table or alias the column belongs to, or null
+     * @param columnName  the column to compare
+     * @param operator    the comparison operator, such as {@code >} or {@code LIKE}
+     * @param value       the value to compare with
+     * @return this schema
+     */
+    default Schema orWhere(String tablePrefix, String columnName, String operator, Object value) {
+        throw new UnsupportedOperationException("orWhere is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds an {@code IS NULL} condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to check
+     * @return this schema
+     */
+    default Schema orWhereNull(String columnName) {
+        throw new UnsupportedOperationException("orWhereNull is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds an {@code IS NOT NULL} condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to check
+     * @return this schema
+     */
+    default Schema orWhereNotNull(String columnName) {
+        throw new UnsupportedOperationException("orWhereNotNull is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds an {@code IN} condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to compare
+     * @param objects    the values the column may be equal to
+     * @return this schema
+     */
+    default Schema orWhereIn(String columnName, Object... objects) {
+        throw new UnsupportedOperationException("orWhereIn is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code BETWEEN} condition joined to the previous one with {@code OR}.
+     *
+     * @param columnName the column to compare
+     * @param from       the lower bound
+     * @param to         the upper bound
+     * @return this schema
+     */
+    default Schema orWhereBetween(String columnName, Object from, Object to) {
+        throw new UnsupportedOperationException("orWhereBetween is not supported by " + getClass().getName());
+    }
+
+    /**
      * Adds a LEFT JOIN to the query.
      * The join is of the format: {@code primaryTable LEFT JOIN foreignTable ON primaryTable.primaryColumn = foreignTable.foreignColumn}.
      * The {@code primaryColumnAlias} is an optional alias for the primary column.
@@ -541,6 +726,63 @@ public interface Schema {
      * @throws SQLException if a database access error occurs or the query execution fails
      */
     long executeSelectCount(DatabaseConnection databaseConnection, Logger logger) throws SQLException;
+
+    /**
+     * Runs {@code SELECT function(column)} with the conditions and joins of this schema.
+     *
+     * @param function one of {@code SUM}, {@code MAX}, {@code MIN} or {@code AVG}
+     * @param columnName the column to aggregate
+     * @return the value as returned by the driver, or null when no row matches
+     */
+    default Object executeSelectAggregate(String function, String columnName, DatabaseConnection databaseConnection, Logger logger) throws SQLException {
+        throw new UnsupportedOperationException("executeSelectAggregate is not supported by " + getClass().getName());
+    }
+
+    /**
+     * @return whether at least one row matches the conditions of this schema
+     */
+    default boolean executeExists(DatabaseConnection databaseConnection, Logger logger) throws SQLException {
+        throw new UnsupportedOperationException("executeExists is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Groups the rows of a select by the given columns. Each column is written as is, like an
+     * {@code ORDER BY} column, so {@code t.column} works.
+     *
+     * @param columns the columns to group by
+     * @return this schema
+     */
+    default Schema groupBy(String... columns) {
+        throw new UnsupportedOperationException("groupBy is not supported by " + getClass().getName());
+    }
+
+    /**
+     * Adds a {@code HAVING} condition, which filters the groups of a select. The expression is
+     * written as is, for example {@code COUNT(*)} or {@code SUM(`amount`)}; the value is bound.
+     * Several conditions are joined with {@code AND}.
+     *
+     * @param expression the expression to compare
+     * @param operator   the comparison operator, such as {@code >=}
+     * @param value      the value to compare with
+     * @return this schema
+     */
+    default Schema having(String expression, String operator, Object value) {
+        throw new UnsupportedOperationException("having is not supported by " + getClass().getName());
+    }
+
+    /**
+     * @return the {@code GROUP BY} columns, as written in the statement
+     */
+    default List<String> getGroupBy() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * @return the {@code HAVING} conditions
+     */
+    default List<WhereCondition> getHavingConditions() {
+        return Collections.emptyList();
+    }
 
     /**
      * Executes a SELECT query on the specified database connection and retrieves the results.
@@ -667,6 +909,69 @@ public interface Schema {
      * @return true if the query results are distinct, false otherwise
      */
     boolean isDistinct();
+
+    /**
+     * Limits the number of rows returned by a select.
+     *
+     * @param limit the maximum number of rows
+     * @return the current schema builder
+     */
+    Schema limit(int limit);
+
+    /**
+     * Skips rows at the start of a select, usually together with {@link #orderBy(String)} and
+     * {@link #limit(int)} to read a table page by page.
+     *
+     * @param offset the number of rows to skip
+     * @return the current schema builder
+     */
+    Schema offset(int offset);
+
+    /**
+     * @return the row limit, or null when there is none
+     */
+    Integer getLimit();
+
+    /**
+     * @return the number of rows skipped, or null when there is none
+     */
+    Integer getOffset();
+
+    /**
+     * Adds a value to a numeric column instead of replacing it.
+     *
+     * <p>An update writes {@code col = col + amount}. An upsert inserts {@code amount} into a new
+     * row and adds it to the existing value otherwise, in one atomic statement. An insert writes
+     * {@code amount} as is.</p>
+     *
+     * @param columnName the column
+     * @param amount     the amount to add, negative to subtract
+     * @return the current schema builder
+     */
+    Schema increment(String columnName, Number amount);
+
+    /**
+     * Assigns a raw SQL expression to a column, for example {@code version + 1} or
+     * {@code CURRENT_TIMESTAMP}. Identifiers in the expression should be quoted with backticks
+     * so they are translated for every dialect.
+     *
+     * <p>An update assigns it. An upsert only applies it when the row already exists and leaves
+     * the column out of a new row. An insert uses it as the inserted value.</p>
+     *
+     * @param columnName the column
+     * @param expression the SQL expression, with {@code ?} placeholders
+     * @param parameters the values bound to the placeholders
+     * @return the current schema builder
+     */
+    Schema expression(String columnName, String expression, Object... parameters);
+
+    /**
+     * Marks the last added value so an upsert writes it into a new row but keeps the existing
+     * value when the row already exists, for example a creation date.
+     *
+     * @return the current schema builder
+     */
+    Schema insertOnly();
 
     /**
      * Adds a column to the SELECT clause of the SQL query.

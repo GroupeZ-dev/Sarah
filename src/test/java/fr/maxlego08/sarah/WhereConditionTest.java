@@ -205,4 +205,73 @@ public class WhereConditionTest extends DatabaseTestBase {
         // Behavior may vary, but typically should return no results or handle gracefully
         assertTrue(results.size() >= 0);
     }
+
+    @Test
+    public void testWhereNotIn() {
+        List<Map<String, Object>> results = requestHelper.select("test_users", schema -> {
+            schema.whereNotIn("username", "alice", "bob");
+        });
+
+        assertEquals(2, results.size());
+        assertTrue(results.stream().noneMatch(row -> "alice".equals(row.get("username")) || "bob".equals(row.get("username"))));
+    }
+
+    @Test
+    public void testWhereNotInEmptyListMatchesEverything() {
+        assertEquals(4, requestHelper.count("test_users", schema -> schema.whereNotIn("username")));
+        assertEquals(4, requestHelper.count("test_users", schema -> schema.whereNotIn(null, "username", Arrays.asList())));
+    }
+
+    @Test
+    public void testWhereBetweenIncludesBounds() {
+        List<Map<String, Object>> results = requestHelper.select("test_users", schema -> {
+            schema.whereBetween("age", 25, 30);
+        });
+
+        assertEquals(3, results.size());
+    }
+
+    @Test
+    public void testWhereNotBetween() {
+        List<Map<String, Object>> results = requestHelper.select("test_users", schema -> {
+            schema.whereNotBetween("age", 25, 30);
+        });
+
+        assertEquals(1, results.size());
+        assertEquals("charlie", results.get(0).get("username"));
+    }
+
+    @Test
+    public void testWhereBetweenCombinedWithOtherConditions() {
+        assertEquals(2, requestHelper.count("test_users", schema -> {
+            schema.where("active", true);
+            schema.whereBetween("age", 26, 40);
+            schema.whereNotIn("username", "alice");
+        }));
+    }
+
+    @Test
+    public void testWhereBetweenInUpdateAndDelete() {
+        assertEquals(2, requestHelper.updateAndCount("test_users", schema -> {
+            schema.bool("active", false);
+            schema.whereBetween("age", 29, 31);
+        }));
+        assertEquals(3, requestHelper.count("test_users", schema -> schema.where("active", false)));
+
+        assertEquals(2, requestHelper.deleteAndCount("test_users", schema -> schema.whereNotBetween("age", 26, 34)));
+        assertEquals(2, requestHelper.count("test_users", schema -> {
+        }));
+    }
+
+    @Test
+    public void testWhereLikeAndNotLike() {
+        assertEquals(1, requestHelper.count("test_users", schema -> schema.whereLike("username", "ch%")));
+        assertEquals(3, requestHelper.count("test_users", schema -> schema.whereNotLike("username", "ch%")));
+    }
+
+    @Test
+    public void testBetweenNeedsTwoValues() {
+        assertThrows(IllegalArgumentException.class, () -> new fr.maxlego08.sarah.conditions.WhereCondition(
+                null, "age", fr.maxlego08.sarah.conditions.WhereCondition.WhereAction.BETWEEN, Arrays.asList(1)));
+    }
 }

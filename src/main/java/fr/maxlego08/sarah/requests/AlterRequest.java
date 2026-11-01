@@ -49,7 +49,7 @@ public class AlterRequest implements Executor {
             alterTableSQL.append(", ADD ").append(fk);
         }
 
-        String finalQuery = databaseConfiguration.replacePrefix(alterTableSQL.toString());
+        String finalQuery = databaseConfiguration.prepare(alterTableSQL.toString());
         if (databaseConfiguration.isDebug()) {
             logger.info("Executing SQL: " + finalQuery);
         }
@@ -59,7 +59,7 @@ public class AlterRequest implements Executor {
             preparedStatement.execute();
             return preparedStatement.getUpdateCount();
         } catch (SQLException exception) {
-            logger.info("Alter table operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            logger.error("Alter table operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("alter", this.schema.getTableName(), exception);
         }
     }
@@ -76,13 +76,13 @@ public class AlterRequest implements Executor {
     private int executeSqlite(DatabaseConnection databaseConnection, DatabaseConfiguration databaseConfiguration, Logger logger) {
 
         if (!this.schema.getPrimaryKeys().isEmpty() || !this.schema.getForeignKeys().isEmpty()) {
-            logger.info("SQLite cannot add primary or foreign keys with ALTER TABLE, ignoring them on table: " + this.schema.getTableName());
+            logger.warn("SQLite cannot add primary or foreign keys with ALTER TABLE, ignoring them on table: " + this.schema.getTableName());
         }
 
         List<String> queries = new ArrayList<>();
         for (ColumnDefinition column : this.schema.getColumns()) {
             String query = "ALTER TABLE " + this.schema.getTableName() + " ADD COLUMN " + column.build(databaseConfiguration);
-            queries.add(databaseConfiguration.replacePrefix(query));
+            queries.add(databaseConfiguration.prepare(query));
         }
 
         if (queries.isEmpty()) {
@@ -102,7 +102,7 @@ public class AlterRequest implements Executor {
             }
             return updateCount;
         } catch (SQLException exception) {
-            logger.info("Alter table operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
+            logger.error("Alter table operation failed on table: " + this.schema.getTableName() + " - " + exception.getMessage());
             throw new DatabaseException("alter", this.schema.getTableName(), exception);
         }
     }
