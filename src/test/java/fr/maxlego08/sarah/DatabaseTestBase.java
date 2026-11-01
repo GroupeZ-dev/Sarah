@@ -48,7 +48,7 @@ public abstract class DatabaseTestBase {
         }
 
         // Clean up SQLite file if exists
-        if (configuration.getDatabaseType() == DatabaseType.SQLITE) {
+        if (sqliteFile != null) {
             this.sqliteFile.delete();
         }
     }
@@ -59,13 +59,15 @@ public abstract class DatabaseTestBase {
     protected DatabaseConfiguration createConfiguration() {
         // Default to SQLite for easier testing. Pass -Dsarah.test.type=POSTGRESQL (or MYSQL,
         // MARIADB) plus sarah.test.host/port/user/password/database to run against a server.
-        String type = System.getProperty("sarah.test.type", "SQLITE");
+        String type = System.getProperty("sarah.test.type", "SQLITE").trim().toUpperCase(java.util.Locale.ROOT);
+        if (type.equals("POSTGRES")) type = "POSTGRESQL";
+        DatabaseType databaseType = DatabaseType.valueOf(type);
         if (type.equalsIgnoreCase("SQLITE")) {
             return DatabaseConfiguration.sqlite(true);
         }
         return new DatabaseConfiguration("", System.getProperty("sarah.test.user", "sarah"), System.getProperty("sarah.test.password", "sarah"),
-                Integer.parseInt(System.getProperty("sarah.test.port", "5432")), System.getProperty("sarah.test.host", "localhost"),
-                System.getProperty("sarah.test.database", "sarah"), true, DatabaseType.valueOf(type.toUpperCase()));
+                Integer.parseInt(System.getProperty("sarah.test.port", databaseType == DatabaseType.POSTGRESQL ? "5432" : "3306")), System.getProperty("sarah.test.host", "localhost"),
+                System.getProperty("sarah.test.database", "sarah"), true, databaseType);
     }
 
     /**

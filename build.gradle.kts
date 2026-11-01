@@ -1,4 +1,5 @@
 import java.util.Locale
+import java.util.Properties
 
 plugins {
     `java-library`
@@ -72,13 +73,45 @@ tasks.shadowJar {
     destinationDirectory.set(rootProject.extra["targetFolder"] as File)
 }
 
-tasks.test {
+fun Test.configureDatabaseTests(type: String? = null) {
     useJUnitPlatform()
-    System.getProperties().stringPropertyNames()
-        .filter { it.startsWith("sarah.test.") }
-        .forEach { systemProperty(it, System.getProperty(it)) }
+    maxParallelForks = 1
+    val localSettings = Properties()
+    val settingsFile = rootProject.file("test-databases.properties")
+    if (settingsFile.isFile) settingsFile.reader(Charsets.UTF_8).use { localSettings.load(it) }
+    fun overrideValue(key: String): String? = providers.systemProperty("sarah.test.$key")
+        .orElse(providers.environmentVariable("SARAH_TEST_${key.uppercase(Locale.ROOT)}")).orNull
+    val selectedType = (type ?: overrideValue("type") ?: localSettings.getProperty("type", "SQLITE"))
+        .trim().uppercase(Locale.ROOT).let { if (it == "POSTGRES") "POSTGRESQL" else it }
+    require(selectedType in listOf("SQLITE", "MARIADB", "MYSQL", "POSTGRESQL")) {
+        "Unsupported test database type: $selectedType"
+    }
+    systemProperty("sarah.test.type", selectedType)
+    val prefix = selectedType.lowercase(Locale.ROOT)
+    listOf("host", "port", "user", "password", "database").forEach { key ->
+        val value = overrideValue(key) ?: localSettings.getProperty("$prefix.$key")
+        if (value != null) systemProperty("sarah.test.$key", value)
+    }
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
 }
 
+tasks.test { configureDatabaseTests() }
+
+listOf("Sqlite" to "SQLITE", "MariaDb" to "MARIADB", "MySql" to "MYSQL", "PostgreSql" to "POSTGRESQL").forEach { (suffix, type) ->
+    tasks.register<Test>("test$suffix") {
+        group = "verification"
+        description = "Runs tests against $type using a dedicated test database."
+        testClassesDirs = sourceSets.test.get().output.classesDirs
+        classpath = sourceSets.test.get().runtimeClasspath
+        configureDatabaseTests(type)
+        mustRunAfter(tasks.test)
+    }
+}
+// The suites share database tables, fixture files and static migration configuration.
+tasks.named("testMariaDb") { mustRunAfter("testSqlite") }
+tasks.named("testMySql") { mustRunAfter("testSqlite", "testMariaDb") }
+tasks.named("testPostgreSql") { mustRunAfter("testSqlite", "testMariaDb", "testMySql") }
 publishConfig {
     githubOwner = "GroupeZ-dev"
     useRootProjectName = true
