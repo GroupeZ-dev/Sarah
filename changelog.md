@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.27 - 2026-11-01
 
 ### New features
 
